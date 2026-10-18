@@ -2,6 +2,7 @@ package com.Nhom2.booking.controller;
 
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.exception.TooManyRequestsException;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,15 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(response.getBody()).containsEntry("message", "Not yours");
+    }
+
+    @Test
+    void rateLimitMapsTo429WithMessage() {
+        ResponseEntity<Map<String, String>> response =
+                handler.handleTooManyRequests(new TooManyRequestsException("Try again later"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(response.getBody()).containsEntry("message", "Try again later");
     }
 
     @Test

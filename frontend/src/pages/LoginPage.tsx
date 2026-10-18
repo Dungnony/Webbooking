@@ -7,6 +7,9 @@ import { authApi } from '../api';
 import { saveSession } from '../utils/auth';
 import { getErrorMessage, getErrorStatus } from '../utils/errors';
 
+// Backend locks an account for 15 minutes after repeated wrong passwords.
+const TOO_MANY_REQUESTS = 429;
+
 const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -37,7 +40,9 @@ const LoginPage: React.FC = () => {
       redirectByRole(role);
     } catch (error) {
       const status = getErrorStatus(error);
-      if (status === 401 || status === 400) {
+      if (status === TOO_MANY_REQUESTS) {
+        message.error(getErrorMessage(error, 'Bạn đã thử quá nhiều lần. Vui lòng thử lại sau.'));
+      } else if (status === 401 || status === 400) {
         message.error('Tên đăng nhập hoặc mật khẩu không đúng!');
       } else if (status === undefined) {
         message.error('Không thể kết nối server. Kiểm tra backend đang chạy!');

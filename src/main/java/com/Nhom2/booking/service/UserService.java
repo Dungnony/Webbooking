@@ -8,14 +8,18 @@ import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.UserRepository;
+import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.security.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
+import java.time.Duration;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +35,14 @@ public class UserService {
     private static final int MAX_PASSWORD_LENGTH = 72;
     private static final String PASSWORD_POLICY_MESSAGE =
             "Mật khẩu phải chứ từ 8-72 ký tự bào gồm chữ hoa, chữ thường, số , ký tự đặc biệt và không có khoảng trống.";
+    // Brute-force protection: limits are per account/email, see RateLimiter for why not per IP.
+    static final int MAX_FAILED_LOGINS = 5;
+    static final int MAX_OTP_REQUESTS = 3;
+    private static final Duration LIMIT_WINDOW = Duration.ofMinutes(15);
+    private static final String LOGIN_LOCKED_MESSAGE =
+            "Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút hoặc dùng \"Quên mật khẩu\".";
+    private static final String OTP_LIMIT_MESSAGE =
+            "Bạn đã yêu cầu mã OTP quá nhiều lần. Vui lòng thử lại sau 15 phút.";
     private final Map<String, RegisterRequest> pendingUsers = new HashMap<>();
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
@@ -38,6 +50,7 @@ public class UserService {
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
     private final GoogleTokenVerifier googleTokenVerifier;
+    private final RateLimiter rateLimiter;
 
     public UserService(
             UserRepository userRepository,
@@ -45,7 +58,8 @@ public class UserService {
             MailService mailService,
             OtpService otpService,
             PasswordEncoder passwordEncoder,
-            GoogleTokenVerifier googleTokenVerifier
+            GoogleTokenVerifier googleTokenVerifier,
+            RateLimiter rateLimiter
     ) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
@@ -53,6 +67,7 @@ public class UserService {
         this.otpService = otpService;
         this.passwordEncoder = passwordEncoder;
         this.googleTokenVerifier = googleTokenVerifier;
+        this.rateLimiter = rateLimiter;
     }
     // GET ALL
     public List<User> getAll() {
@@ -101,6 +116,7 @@ public class UserService {
             throw new RuntimeException("Email mới trùng với email hiện tại");
         }
         ensureEmailNotUsedByOthers(email, user);
+        limitOtpRequests("otp-email:" + username);
 
         String otp = otpService.generateOtp(emailChangeOtpKey(username, email));
         mailService.sendMail(
@@ -155,6 +171,13 @@ public class UserService {
                 .anyMatch(other -> !other.getId().equals(ownerId));
     }
 
+    // Each OTP request sends a mail from the team's Gmail account, so it is capped per account/email.
+    private void limitOtpRequests(String key) {
+        if (!rateLimiter.tryAcquire(key, MAX_OTP_REQUESTS, LIMIT_WINDOW)) {
+            throw new TooManyRequestsException(OTP_LIMIT_MESSAGE);
+        }
+    }
+
     private static String emailChangeOtpKey(String username, String email) {
         return EMAIL_CHANGE_OTP_PREFIX + username + ":" + email;
     }
@@ -198,6 +221,7 @@ public class UserService {
             throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
         }
         request.setEmail(email);
+        limitOtpRequests("otp-register:" + email.toLowerCase(Locale.ROOT));
         String otp = otpService.generateOtp(email);
         pendingUsers.put(email, request);
         mailService.sendMail(
@@ -233,15 +257,26 @@ public class UserService {
     }
     // LOGIN
     public String login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        String attemptKey = "login:" + String.valueOf(request.getUsername()).trim().toLowerCase(Locale.ROOT);
+        if (rateLimiter.isLimited(attemptKey, MAX_FAILED_LOGINS)) {
+            throw new TooManyRequestsException(LOGIN_LOCKED_MESSAGE);
+        }
+
+        Optional<User> found = userRepository.findByUsername(request.getUsername());
+        if (found.isEmpty()) {
+            rateLimiter.record(attemptKey, LIMIT_WINDOW);
+            throw new RuntimeException("User not found");
+        }
+        User user = found.get();
         if (user.getRole() == null) {
             user.setRole(UserRole.USER);
             userRepository.save(user);
         }
         if (!passwordMatches(request.getPassword(), user.getPassword())) {
+            rateLimiter.record(attemptKey, LIMIT_WINDOW);
             throw new RuntimeException("Wrong password");
         }
+        rateLimiter.reset(attemptKey);
         if (!isBcrypt(user.getPassword())) {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
             userRepository.save(user);
@@ -270,6 +305,7 @@ public class UserService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản với username: " + request.getUsername()));
 
         String email = user.getEmail();
+        limitOtpRequests("otp-reset:" + user.getUsername());
         String otp = otpService.generateOtp("reset:" + user.getUsername());
 
         mailService.sendMail(

@@ -5,11 +5,13 @@ import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.security.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -48,7 +50,8 @@ class UserServiceEmailChangeTest {
                 mailService,
                 new OtpService(),
                 mock(PasswordEncoder.class),
-                mock(GoogleTokenVerifier.class));
+                mock(GoogleTokenVerifier.class),
+                new RateLimiter(Clock.systemUTC()));
 
         alice = user(5L, "alice", "old@example.com");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));

@@ -5,13 +5,16 @@ import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
+import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.security.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mail.MailSendException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,7 +47,8 @@ class UserServiceLoginTest {
         passwordEncoder = mock(PasswordEncoder.class);
         googleTokenVerifier = mock(GoogleTokenVerifier.class);
         userService = new UserService(
-                userRepository, jwtUtil, mailService, mock(OtpService.class), passwordEncoder, googleTokenVerifier);
+                userRepository, jwtUtil, mailService, mock(OtpService.class), passwordEncoder, googleTokenVerifier,
+                new RateLimiter(Clock.systemUTC()));
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(jwtUtil.generateToken(anyString(), any(UserRole.class)))
@@ -107,6 +111,42 @@ class UserServiceLoginTest {
         request.setPassword("Secret#2026");
 
         assertThat(userService.login(request)).isEqualTo("jwt-for-alice");
+    }
+
+    @Test
+    void tooManyWrongPasswordsLockTheAccountEvenForTheRightPassword() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user("alice", "alice@gmail.com")));
+        when(passwordEncoder.matches("Secret#2026", "$2a$hash")).thenReturn(true);
+
+        for (int i = 0; i < UserService.MAX_FAILED_LOGINS; i++) {
+            assertThatThrownBy(() -> userService.login(loginRequest("alice", "wrong")))
+                    .isNotInstanceOf(TooManyRequestsException.class);
+        }
+
+        assertThatThrownBy(() -> userService.login(loginRequest("alice", "Secret#2026")))
+                .isInstanceOf(TooManyRequestsException.class);
+    }
+
+    @Test
+    void successfulLoginResetsTheFailureCount() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user("alice", "alice@gmail.com")));
+        when(passwordEncoder.matches("Secret#2026", "$2a$hash")).thenReturn(true);
+
+        for (int i = 0; i < UserService.MAX_FAILED_LOGINS - 1; i++) {
+            assertThatThrownBy(() -> userService.login(loginRequest("alice", "wrong")));
+        }
+        userService.login(loginRequest("alice", "Secret#2026"));
+        assertThatThrownBy(() -> userService.login(loginRequest("alice", "wrong")))
+                .isNotInstanceOf(TooManyRequestsException.class);
+
+        assertThat(userService.login(loginRequest("alice", "Secret#2026"))).isEqualTo("jwt-for-alice");
+    }
+
+    private static LoginRequest loginRequest(String username, String password) {
+        LoginRequest request = new LoginRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+        return request;
     }
 
     private static User user(String username, String email) {

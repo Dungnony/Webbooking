@@ -6,6 +6,7 @@ import com.Nhom2.booking.dto.LoginRequest;
 import com.Nhom2.booking.dto.RegisterRequest;
 import com.Nhom2.booking.dto.ResetPasswordRequest;
 import com.Nhom2.booking.dto.VerifyOtpRequest;
+import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.service.UserService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,6 +27,8 @@ public class AuthController {
     public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
         try {
             return ResponseEntity.ok(userService.sendOtp(request));
+        } catch (TooManyRequestsException e) {
+            return tooManyRequests(e);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -46,6 +49,8 @@ public class AuthController {
     public ResponseEntity<String> login(@RequestBody LoginRequest request) {
         try {
             return ResponseEntity.ok(userService.login(request));
+        } catch (TooManyRequestsException e) {
+            return tooManyRequests(e);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
@@ -61,6 +66,8 @@ public class AuthController {
         try {
             String maskedEmail = userService.forgotPassword(request);
             return ResponseEntity.ok(maskedEmail);
+        } catch (TooManyRequestsException e) {
+            return tooManyRequests(e);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -88,5 +95,9 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
         }
+    }
+
+    private static ResponseEntity<String> tooManyRequests(TooManyRequestsException e) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(e.getMessage());
     }
 }

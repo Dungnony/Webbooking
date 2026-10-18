@@ -7,10 +7,12 @@ import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.security.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Clock;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,7 +42,8 @@ class UserServiceProfileTest {
                 mock(MailService.class),
                 mock(OtpService.class),
                 passwordEncoder,
-                mock(GoogleTokenVerifier.class));
+                mock(GoogleTokenVerifier.class),
+                new RateLimiter(Clock.systemUTC()));
 
         existing = new User();
         existing.setId(5L);
