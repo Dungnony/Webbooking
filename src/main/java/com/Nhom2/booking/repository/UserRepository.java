@@ -11,7 +11,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
 
-    List<User> findByEmail(String email);
+    // Email providers treat addresses case-insensitively, so uniqueness checks must too.
+    List<User> findByEmailIgnoreCase(String email);
 
     List<User> findByRole(UserRole role);
 

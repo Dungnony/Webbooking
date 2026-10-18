@@ -1,0 +1,143 @@
+package com.Nhom2.booking.config;
+
+import com.Nhom2.booking.controller.AuthController;
+import com.Nhom2.booking.controller.ChatController;
+import com.Nhom2.booking.controller.ImageController;
+import com.Nhom2.booking.controller.RoomController;
+import com.Nhom2.booking.controller.UserController;
+import com.Nhom2.booking.entity.User;
+import com.Nhom2.booking.repository.AppConfigRepository;
+import com.Nhom2.booking.repository.HotelRepository;
+import com.Nhom2.booking.repository.RoomRepository;
+import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.service.RoomService;
+import com.Nhom2.booking.service.UserService;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.client.RestTemplate;
+
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(controllers = {
+        AuthController.class,
+        ChatController.class,
+        ImageController.class,
+        RoomController.class,
+        UserController.class
+})
+@Import({SecurityConfig.class, JwtUtil.class})
+class SecurityRulesTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private UserService userService;
+
+    @MockitoBean
+    private RoomService roomService;
+
+    @MockitoBean
+    private AppConfigRepository appConfigRepository;
+
+    @MockitoBean
+    private RestTemplate restTemplate;
+
+    @MockitoBean
+    private HotelRepository hotelRepository;
+
+    @MockitoBean
+    private RoomRepository roomRepository;
+
+    @Test
+    void debugEndpointThatLeakedPasswordHashesNoLongerExists() throws Exception {
+        mockMvc.perform(get("/auth/debug/admin"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void chatRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/chat")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void regularUserCannotUploadImages() throws Exception {
+        MockMultipartFile file = new MockMultipartFile("file", "a.png", "image/png", new byte[]{1});
+
+        mockMvc.perform(multipart("/api/images/hotel/1").file(file))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void regularUserCannotCreateOrDeleteRooms() throws Exception {
+        mockMvc.perform(post("/rooms/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/rooms/1"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCanDeleteRooms() throws Exception {
+        mockMvc.perform(delete("/rooms/1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void anyoneCanBrowseRooms() throws Exception {
+        mockMvc.perform(get("/rooms/hotel/1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(username = "alice", roles = "USER")
+    void regularUserCanReadOwnProfileButNotTheUserList() throws Exception {
+        User alice = new User();
+        alice.setUsername("alice");
+        when(userService.getByUsername("alice")).thenReturn(alice);
+
+        mockMvc.perform(get("/users/me"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/users"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "alice", roles = "USER")
+    void regularUserCanChangeOwnEmailViaOtp() throws Exception {
+        mockMvc.perform(post("/users/me/email/otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new@example.com\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/users/me/email")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new@example.com\",\"otp\":\"123456\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void emailChangeRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/users/me/email/otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new@example.com\"}"))
+                .andExpect(status().isForbidden());
+    }
+}

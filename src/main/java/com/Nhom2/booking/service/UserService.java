@@ -3,11 +3,16 @@ import com.Nhom2.booking.dto.ForgotPasswordRequest;
 import com.Nhom2.booking.dto.LoginRequest;
 import com.Nhom2.booking.dto.RegisterRequest;
 import com.Nhom2.booking.dto.ResetPasswordRequest;
+import com.Nhom2.booking.dto.UpdateProfileRequest;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
+import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.UserRepository;
+import com.Nhom2.booking.security.GoogleTokenVerifier;
 import com.Nhom2.booking.security.JwtUtil;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.mail.MailException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
@@ -15,8 +20,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Pattern;
 @Service
 public class UserService {
+    private static final Logger log = LoggerFactory.getLogger(UserService.class);
+    private static final String EMAIL_CHANGE_OTP_PREFIX = "email-change:";
+    private static final String EMAIL_EXISTS_MESSAGE = "Email already exists";
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final int MAX_PASSWORD_LENGTH = 72;
     private static final String PASSWORD_POLICY_MESSAGE =
@@ -27,22 +37,22 @@ public class UserService {
     private final MailService mailService;
     private final OtpService otpService;
     private final PasswordEncoder passwordEncoder;
-
-    @Value("${google.client-id:}")
-    private String googleClientId;
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     public UserService(
             UserRepository userRepository,
             JwtUtil jwtUtil,
             MailService mailService,
             OtpService otpService,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            GoogleTokenVerifier googleTokenVerifier
     ) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
         this.mailService = mailService;
         this.otpService = otpService;
         this.passwordEncoder = passwordEncoder;
+        this.googleTokenVerifier = googleTokenVerifier;
     }
     // GET ALL
     public List<User> getAll() {
@@ -52,17 +62,109 @@ public class UserService {
     public Optional<User> getUser(Long id) {
         return userRepository.findById(id);
     }
+
+    public User getByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    /**
+     * Self-service password change. Username is the JWT subject and role is admin-managed,
+     * so neither can be changed here; the email goes through requestEmailChange/confirmEmailChange.
+     */
+    public User updateProfile(String username, UpdateProfileRequest request) {
+        if (request == null || isBlank(request.getNewPassword())) {
+            throw new RuntimeException("Vui lòng nhập mật khẩu mới");
+        }
+
+        User user = getByUsername(username);
+        validatePasswordStrength(request.getNewPassword(), user.getUsername(), user.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        return userRepository.save(user);
+    }
+
+    /**
+     * Bước 1 đổi email: gửi OTP tới email MỚI. Email chỉ được đổi sau khi xác nhận OTP,
+     * vì Google login gắn tài khoản theo email nên email phải chứng minh được quyền sở hữu.
+     */
+    public String requestEmailChange(String username, String newEmail) {
+        String email = requireValidEmail(newEmail);
+        User user = getByUsername(username);
+        if (email.equalsIgnoreCase(user.getEmail())) {
+            throw new RuntimeException("Email mới trùng với email hiện tại");
+        }
+        ensureEmailNotUsedByOthers(email, user);
+
+        String otp = otpService.generateOtp(emailChangeOtpKey(username, email));
+        mailService.sendMail(
+                email,
+                "Xác nhận đổi email - Booking.com",
+                "Xin chào " + user.getUsername() + ",\n\n"
+                        + "Mã OTP để xác nhận email mới của bạn là: " + otp + "\n\n"
+                        + "Nếu bạn không yêu cầu đổi email, vui lòng bỏ qua email này."
+        );
+        return maskEmail(email);
+    }
+
+    /**
+     * Bước 2 đổi email: OTP gắn với đúng cặp (username, email mới) nên không dùng được cho email khác.
+     */
+    public User confirmEmailChange(String username, String newEmail, String otp) {
+        String email = requireValidEmail(newEmail);
+        if (isBlank(otp)) {
+            throw new RuntimeException("Vui lòng nhập mã OTP");
+        }
+
+        User user = getByUsername(username);
+        String otpKey = emailChangeOtpKey(username, email);
+        if (!otpService.verifyOtp(otpKey, otp.trim())) {
+            throw new RuntimeException("Mã OTP không đúng hoặc đã hết hạn");
+        }
+        // Re-checked because another account may have claimed the address since the OTP was sent.
+        ensureEmailNotUsedByOthers(email, user);
+
+        user.setEmail(email);
+        User saved = userRepository.save(user);
+        otpService.removeOtp(otpKey);
+        return saved;
+    }
+
+    private String requireValidEmail(String email) {
+        if (isBlank(email) || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
+            throw new RuntimeException("Email không hợp lệ");
+        }
+        return email.trim();
+    }
+
+    private void ensureEmailNotUsedByOthers(String email, User user) {
+        if (isEmailTakenByOther(email, user.getId())) {
+            throw new RuntimeException("Email đã được sử dụng bởi tài khoản khác");
+        }
+    }
+
+    /** One email belongs to at most one account; {@code ownerId} is null for an account not created yet. */
+    private boolean isEmailTakenByOther(String email, Long ownerId) {
+        return userRepository.findByEmailIgnoreCase(email).stream()
+                .anyMatch(other -> !other.getId().equals(ownerId));
+    }
+
+    private static String emailChangeOtpKey(String username, String email) {
+        return EMAIL_CHANGE_OTP_PREFIX + username + ":" + email;
+    }
     // CREATE / UPDATE
     public User create(User user) {
         User existingUser = null;
         if (user.getId() != null) {
             existingUser = userRepository.findById(user.getId())
-                    .orElseThrow(() -> new RuntimeException("User not found"));
+                    .orElseThrow(() -> new NotFoundException("User not found"));
         }
         if (user.getRole() == null) {
             user.setRole(existingUser != null && existingUser.getRole() != null
                     ? existingUser.getRole()
                     : UserRole.USER);
+        }
+        if (!isBlank(user.getEmail()) && isEmailTakenByOther(user.getEmail().trim(), user.getId())) {
+            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
         }
         if (isBlank(user.getPassword())) {
             if (existingUser == null) {
@@ -84,23 +186,33 @@ public class UserService {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new RuntimeException("Username already exists");
         }
-        String otp = otpService.generateOtp(request.getEmail());
-        pendingUsers.put(request.getEmail(), request);
+        String email = requireValidEmail(request.getEmail());
+        if (isEmailTakenByOther(email, null)) {
+            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
+        }
+        request.setEmail(email);
+        String otp = otpService.generateOtp(email);
+        pendingUsers.put(email, request);
         mailService.sendMail(
-                request.getEmail(),
+                email,
                 "Xác nhận đăng ký tài khoản",
                 "Mã OTP của bạn là: " + otp
         );
         return "OTP sent to email";
     }
     //verify otp
-    public String verifyOtp(String email, String otp) {
+    public String verifyOtp(String rawEmail, String otp) {
+        String email = rawEmail == null ? "" : rawEmail.trim();
         if (!otpService.verifyOtp(email, otp)) {
             throw new RuntimeException("OTP invalid");
         }
         RegisterRequest request = pendingUsers.get(email);
         if (request == null) {
             throw new RuntimeException("No registration request found");
+        }
+        // Re-checked because Google login or an email change may have claimed the address since the OTP was sent.
+        if (isEmailTakenByOther(email, null)) {
+            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
         }
         User user = new User();
         user.setUsername(request.getUsername());
@@ -127,8 +239,7 @@ public class UserService {
             user.setPassword(passwordEncoder.encode(request.getPassword()));
             userRepository.save(user);
         }
-        // gửi mail đăng nhập
-        mailService.sendMail(
+        sendNoticeMail(
                 user.getEmail(),
                 "Đăng nhập thành công",
                 "Xin chào " + user.getUsername() + ", bạn vừa đăng nhập vào hệ thống."
@@ -235,17 +346,14 @@ public class UserService {
      * - Trả về JWT
      */
     public String loginWithGoogle(String googleIdToken) {
-        // Decode & verify Google ID token
-        Map<String, String> googleUser = verifyGoogleToken(googleIdToken);
-        String email = googleUser.get("email");
-        String name = googleUser.get("name");
+        String email = googleTokenVerifier.verifyEmail(googleIdToken);
 
-        if (email == null || email.isEmpty()) {
-            throw new RuntimeException("Không thể lấy email từ tài khoản Google");
+        List<User> existingUsers = userRepository.findByEmailIgnoreCase(email);
+        // Accounts created before emails were enforced unique may share one; picking either could sign the user
+        // into someone else's account.
+        if (existingUsers.size() > 1) {
+            throw new RuntimeException("Email này đang gắn với nhiều tài khoản. Vui lòng đăng nhập bằng tên đăng nhập.");
         }
-
-        // Tìm user theo email
-        List<User> existingUsers = userRepository.findByEmail(email);
 
         User user;
         if (!existingUsers.isEmpty()) {
@@ -273,8 +381,7 @@ public class UserService {
             userRepository.save(user);
         }
 
-        // Gửi mail thông báo
-        mailService.sendMail(
+        sendNoticeMail(
                 user.getEmail(),
                 "Đăng nhập bằng Google thành công",
                 "Xin chào " + user.getUsername() + ", bạn vừa đăng nhập vào hệ thống bằng Google."
@@ -284,48 +391,14 @@ public class UserService {
     }
 
     /**
-     * Verify Google ID Token bằng cách decode JWT payload.
-     * Trong production, nên dùng Google API Client Library để verify signature.
+     * Informational mail only: an SMTP outage must not block login. OTP mails do not use this,
+     * since the flow cannot continue without them.
      */
-    private Map<String, String> verifyGoogleToken(String idToken) {
+    private void sendNoticeMail(String to, String subject, String text) {
         try {
-            // Decode JWT payload (phần 2 của token, base64)
-            String[] parts = idToken.split("\\.");
-            if (parts.length < 2) {
-                throw new RuntimeException("Token Google không hợp lệ");
-            }
-            String payload = new String(java.util.Base64.getUrlDecoder().decode(parts[1]));
-
-            // Parse JSON đơn giản
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> claims = mapper.readValue(payload, Map.class);
-
-            String email = (String) claims.get("email");
-            String name = (String) claims.get("name");
-            Boolean emailVerified = claims.get("email_verified") instanceof Boolean
-                    ? (Boolean) claims.get("email_verified") : Boolean.TRUE;
-
-            if (email == null || !emailVerified) {
-                throw new RuntimeException("Email Google chưa được xác thực");
-            }
-
-            // Verify audience (client ID) nếu đã cấu hình
-            if (googleClientId != null && !googleClientId.isEmpty()) {
-                String aud = (String) claims.get("aud");
-                if (!googleClientId.equals(aud)) {
-                    throw new RuntimeException("Google Client ID không khớp");
-                }
-            }
-
-            Map<String, String> result = new HashMap<>();
-            result.put("email", email);
-            result.put("name", name != null ? name : email.split("@")[0]);
-            return result;
-        } catch (RuntimeException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("Không thể xác thực token Google: " + e.getMessage());
+            mailService.sendMail(to, subject, text);
+        } catch (MailException e) {
+            log.warn("Could not send notice mail '{}': {}", subject, e.getMessage());
         }
     }
 
