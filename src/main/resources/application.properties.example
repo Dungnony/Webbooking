@@ -1,0 +1,37 @@
+# Copy this file to application.properties and fill in the values,
+# or leave the placeholders and provide every value through environment variables.
+# Never commit real credentials.
+
+spring.application.name=backendcuoiky
+server.port=${PORT:8080}
+
+# Database (PostgreSQL / Supabase)
+spring.datasource.url=${SPRING_DATASOURCE_URL}
+spring.datasource.username=${SPRING_DATASOURCE_USERNAME}
+spring.datasource.password=${SPRING_DATASOURCE_PASSWORD}
+supabase.key=${SUPABASE_KEY:}
+
+# Use "validate" in production once the schema is stable.
+spring.jpa.hibernate.ddl-auto=${JPA_DDL_AUTO:update}
+spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
+spring.jpa.show-sql=${JPA_SHOW_SQL:false}
+
+# Mail (Gmail SMTP with an app password)
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=${SPRING_MAIL_USERNAME}
+spring.mail.password=${SPRING_MAIL_PASSWORD}
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+
+# Payment QR - VietQR
+payment.bank.name=${PAYMENT_BANK_NAME:TPBank}
+payment.bank.account-number=${PAYMENT_BANK_ACCOUNT_NUMBER}
+payment.bank.account-name=${PAYMENT_BANK_ACCOUNT_NAME}
+payment.qr.template=compact2
+
+# Required: the Sepay webhook rejects every request while this is empty.
+payment.sepay.api-key=${SEPAY_API_KEY}
+
+# Google OAuth2 Login
+google.client-id=${GOOGLE_CLIENT_ID}
