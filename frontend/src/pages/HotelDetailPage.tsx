@@ -9,10 +9,9 @@ import {
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { hotelApi, reviewApi, HotelWithStats } from '../api';
-import type { Review } from '../api-generated';
 import { useWishlist } from '../context/useWishlist';
 import { transformImageUrl } from '../utils/imageUtils';
-import { cachedFetch, HOTEL_DETAIL_TTL } from '../utils/apiCache';
+import { cachedFetch, HOTEL_DETAIL_TTL, reviewCacheKey } from '../utils/apiCache';
 import HotelReviewAndChatPage from './HotelReviewAndChatPage';
 
 const AMENITIES = [
@@ -50,26 +49,15 @@ const HotelDetailPage: React.FC = () => {
   const [reviewDrawerVisible, setReviewDrawerVisible] = useState(false);
 
   // Đánh giá chỉ dùng để hiển thị điểm; việc viết đánh giá nằm trong drawer HotelReviewAndChatPage
-  const [allReviews, setAllReviews] = useState<Review[]>([]);
-
-  // Lọc đánh giá cho khách sạn này
-  const reviews = useMemo(() => {
-    return allReviews.filter(r => r.hotel?.id === Number(id));
-  }, [allReviews, id]);
-
-  // Tính toán thống kê từ các đánh giá đã lọc
-  const reviewStats = useMemo(() => {
-    if (reviews.length === 0) return { avg: null, total: 0 };
-    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
-    return { avg: sum / reviews.length, total: reviews.length };
-  }, [reviews]);
+  const [reviewStats, setReviewStats] = useState<{ avg: number | null; total: number }>({ avg: null, total: 0 });
 
   const fetchReviews = useCallback(() => {
-    // Reviews ít thay đổi → cache 60s
-    cachedFetch('reviews_all', () => reviewApi.getAll(), REVIEWS_CACHE_TTL_MS)
-      .then(data => setAllReviews(data || []))
+    if (!id) return;
+    // Only the totals are needed here, so one review is enough; reviews change rarely → cache 60s.
+    cachedFetch(reviewCacheKey(Number(id)), () => reviewApi.getForHotel(Number(id), 0, 1), REVIEWS_CACHE_TTL_MS)
+      .then(page => setReviewStats({ avg: page.averageRating, total: page.totalElements }))
       .catch(err => console.error('Failed to load reviews', err));
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;

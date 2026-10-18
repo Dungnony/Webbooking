@@ -1,13 +1,13 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Row, Col, Input, Button, message, Divider } from 'antd';
 import { SendOutlined, StarFilled, LeftOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { LOGIN_REQUIRED_REPLY } from '../components/AIAssistantWidget';
-import { hotelApi, reviewApi, chatApi, ChatMessage, HotelWithStats } from '../api';
-import type { Review } from '../api-generated';
+import { hotelApi, reviewApi, chatApi, ChatMessage, HotelWithStats, ReviewEligibility, ReviewItem } from '../api';
 import { getErrorMessage } from '../utils/errors';
+import { invalidateCache, invalidateCachePrefix, reviewCacheKey } from '../utils/apiCache';
 
 
 /* ── Helper Functions ── */
@@ -90,7 +90,12 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   const [hotel, setHotel] = useState<HotelWithStats | null>(null);
 
   // State đánh giá
-  const [allReviews, setAllReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [reviewStats, setReviewStats] = useState<{ avg: number | null; total: number }>({ avg: null, total: 0 });
+  const [nextReviewPage, setNextReviewPage] = useState(0);
+  const [hasMoreReviews, setHasMoreReviews] = useState(false);
+  const [loadingMoreReviews, setLoadingMoreReviews] = useState(false);
+  const [eligibility, setEligibility] = useState<ReviewEligibility | null>(null);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewHover, setReviewHover] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -105,32 +110,33 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const isLoggedIn = !!localStorage.getItem('token');
-  const currentUsername = useMemo(() => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.sub || payload.username || null;
-    } catch { return null; }
-  }, []);
 
-  const reviews = useMemo(() => allReviews.filter(r => r.hotel?.id === Number(id)), [allReviews, id]);
-  const sortedReviews = useMemo(
-    () => [...reviews].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()),
-    [reviews],
-  );
-  const reviewStats = useMemo(() => {
-    if (reviews.length === 0) return { avg: null, total: 0 };
-    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
-    return { avg: sum / reviews.length, total: reviews.length };
-  }, [reviews]);
-  const hasReviewed = reviews.some(r => r.user?.username === currentUsername);
+  // The backend sorts newest first and pages the list; the average covers every review.
+  const loadReviews = useCallback(async (page: number) => {
+    const { data } = await reviewApi.getForHotel(Number(id), page);
+    setReviews(prev => (page === 0 ? data.content : [...prev, ...data.content]));
+    setReviewStats({ avg: data.averageRating, total: data.totalElements });
+    setNextReviewPage(page + 1);
+    setHasMoreReviews(page + 1 < data.totalPages);
+  }, [id]);
 
   const fetchReviews = useCallback(() => {
-    reviewApi.getAll()
-      .then(res => setAllReviews(res.data || []))
-      .catch(err => console.error('Failed to load reviews', err));
-  }, []);
+    loadReviews(0).catch(err => console.error('Failed to load reviews', err));
+    reviewApi.getEligibility(Number(id))
+      .then(res => setEligibility(res.data))
+      .catch(err => console.error('Failed to load review eligibility', err));
+  }, [id, loadReviews]);
+
+  const handleLoadMoreReviews = async () => {
+    setLoadingMoreReviews(true);
+    try {
+      await loadReviews(nextReviewPage);
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Không thể tải thêm đánh giá.'));
+    } finally {
+      setLoadingMoreReviews(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -155,6 +161,9 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
       message.success('🎉 Đánh giá của bạn đã được gửi thành công!');
       setReviewRating(0);
       setReviewComment('');
+      // The hotel's rating changed: drop cached totals and hotel data so other pages refetch them.
+      invalidateCache(reviewCacheKey(Number(id)));
+      invalidateCachePrefix('hotel');
       fetchReviews();
     } catch (e) {
       message.error(getErrorMessage(e, 'Gửi đánh giá thất bại!'));
@@ -233,7 +242,12 @@ const handleSendMessage = async () => {
               )}
 
               {/* Write Review */}
-              {isLoggedIn && !hasReviewed && (
+              {eligibility && !eligibility.canReview && eligibility.reason && (
+                <div style={{ marginBottom: 24, padding: 16, background: '#f8f9fa', borderRadius: 8, color: '#595959', fontSize: 14 }}>
+                  {eligibility.reason}
+                </div>
+              )}
+              {eligibility?.canReview && (
                 <div style={{ marginBottom: 24, border: '1px solid #e2e8f0', borderRadius: 8, padding: 20 }}>
                   <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>✍️ Chia sẻ trải nghiệm của bạn</h3>
                   <div style={{ marginBottom: 16 }}>
@@ -262,20 +276,20 @@ const handleSendMessage = async () => {
               <Divider />
 
               {/* Reviews List */}
-              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Tất cả đánh giá ({reviews.length})</h3>
-              {sortedReviews.length > 0 ? (
-                sortedReviews.map((review, idx) => (
-                  <div key={review.id ?? idx} style={{ padding: '20px 0', borderBottom: idx < sortedReviews.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', gap: 16 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Tất cả đánh giá ({reviewStats.total})</h3>
+              {reviews.length > 0 ? (
+                reviews.map((review, idx) => (
+                  <div key={review.id ?? idx} style={{ padding: '20px 0', borderBottom: idx < reviews.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', gap: 16 }}>
                     <div style={{
-                      width: 48, height: 48, borderRadius: '50%', background: `hsl(${((review.user?.username || 'U').charCodeAt(0) * 47) % 360}, 55%, 45%)`,
+                      width: 48, height: 48, borderRadius: '50%', background: `hsl(${((review.username || 'U').charCodeAt(0) * 47) % 360}, 55%, 45%)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 20, flexShrink: 0
                     }}>
-                      {(review.user?.username || 'U')[0].toUpperCase()}
+                      {(review.username || 'U')[0].toUpperCase()}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>{review.user?.username || 'Khách'}</div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{review.username || 'Khách'}</div>
                           <div style={{ fontSize: 12, color: '#8c8c8c' }}>{review.createdAt ? formatTimeAgo(review.createdAt) : ''}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -293,6 +307,11 @@ const handleSendMessage = async () => {
                 ))
               ) : (
                 <div style={{ textAlign: 'center', padding: '40px 0', color: '#8c8c8c' }}>Chưa có đánh giá nào.</div>
+              )}
+              {hasMoreReviews && (
+                <div style={{ textAlign: 'center', marginTop: 16 }}>
+                  <Button onClick={handleLoadMoreReviews} loading={loadingMoreReviews}>Xem thêm đánh giá</Button>
+                </div>
               )}
             </div>
           </Col>

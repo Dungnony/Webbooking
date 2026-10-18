@@ -264,9 +264,48 @@ export const adminApi = {
 };
 
 // ─── REVIEWS ──────────────────────────────────────────────────
+export const REVIEW_PAGE_SIZE = 10;
+
+/** Public review view: the backend exposes the author's username only. */
+export interface ReviewItem {
+  id: number;
+  rating: number;
+  comment?: string;
+  createdAt?: string;
+  username?: string;
+}
+
+export interface ReviewPage {
+  content: ReviewItem[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  /** Average over all of the hotel's reviews, not just this page; null when there are none. */
+  averageRating: number | null;
+}
+
+export interface ReviewEligibility {
+  canReview: boolean;
+  reason: string | null;
+}
+
 export const reviewApi = {
-  getAll: () => swaggerApi.api.getAll2(JSON_FMT),
-  create: (data: Review) => swaggerApi.api.create3(data, JSON_FMT),
+  getForHotel: (hotelId: number, page = 0, size = REVIEW_PAGE_SIZE) =>
+    swaggerApi.request<ReviewPage>({
+      path: `/hotels/${hotelId}/reviews`, method: 'GET', query: { page, size }, secure: true, ...JSON_FMT,
+    }),
+  getEligibility: (hotelId: number) =>
+    swaggerApi.request<ReviewEligibility>({
+      path: `/hotels/${hotelId}/review-eligibility`, method: 'GET', secure: true, ...JSON_FMT,
+    }),
+  create: (data: Review) =>
+    unwrap(
+      swaggerApi.request<ReviewItem>({
+        path: '/api/reviews', method: 'POST', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Gửi đánh giá thất bại',
+    ),
 };
 
 // ─── IMAGES ───────────────────────────────────────────────────

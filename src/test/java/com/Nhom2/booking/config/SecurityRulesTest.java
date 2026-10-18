@@ -2,7 +2,9 @@ package com.Nhom2.booking.config;
 
 import com.Nhom2.booking.controller.AuthController;
 import com.Nhom2.booking.controller.ChatController;
+import com.Nhom2.booking.controller.HotelReviewController;
 import com.Nhom2.booking.controller.ImageController;
+import com.Nhom2.booking.controller.ReviewController;
 import com.Nhom2.booking.controller.RoomController;
 import com.Nhom2.booking.controller.UserController;
 import com.Nhom2.booking.entity.User;
@@ -10,6 +12,7 @@ import com.Nhom2.booking.repository.AppConfigRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.RoomRepository;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.service.ReviewService;
 import com.Nhom2.booking.service.RoomService;
 import com.Nhom2.booking.service.UserService;
 import org.junit.jupiter.api.Test;
@@ -34,7 +37,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(controllers = {
         AuthController.class,
         ChatController.class,
+        HotelReviewController.class,
         ImageController.class,
+        ReviewController.class,
         RoomController.class,
         UserController.class
 })
@@ -49,6 +54,9 @@ class SecurityRulesTest {
 
     @MockitoBean
     private RoomService roomService;
+
+    @MockitoBean
+    private ReviewService reviewService;
 
     @MockitoBean
     private AppConfigRepository appConfigRepository;
@@ -131,6 +139,22 @@ class SecurityRulesTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"new@example.com\",\"otp\":\"123456\"}"))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void anyoneCanReadHotelReviews() throws Exception {
+        mockMvc.perform(get("/hotels/1/reviews"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/hotels/1/review-eligibility"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void writingAReviewRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/reviews")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"rating\":9,\"hotel\":{\"id\":1}}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

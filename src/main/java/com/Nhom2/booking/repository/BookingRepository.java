@@ -25,6 +25,8 @@ public interface BookingRepository extends JpaRepository<Booking, Long> {
             PaymentStatus paymentStatus,
             LocalDateTime createdBefore);
 
+    boolean existsByUserIdAndHotelIdAndPaymentStatus(Long userId, Long hotelId, PaymentStatus paymentStatus);
+
     long countByStatus(BookingStatus status);
 
     @Query("select coalesce(sum(b.totalPrice), 0) from Booking b where b.paymentStatus = :paymentStatus")
