@@ -40,10 +40,14 @@
    | `SEPAY_API_KEY` | **Bắt buộc.** Webhook Sepay từ chối mọi request khi biến này trống |
    | `GOOGLE_CLIENT_ID` | Đăng nhập Google |
    | `PAYMENT_BANK_ACCOUNT_NUMBER`, `PAYMENT_BANK_ACCOUNT_NAME` | Tài khoản nhận tiền trên mã VietQR |
-   | `JPA_DDL_AUTO` | Mặc định `update`; nên dùng `validate` khi schema đã ổn định |
+   | `SUPABASE_URL`, `SUPABASE_KEY` | Lưu ảnh upload lên Supabase Storage (`SUPABASE_KEY` là **service_role** key). Thiếu một trong hai thì ảnh lưu vào `./uploads` và **mất khi deploy lại** |
+   | `SUPABASE_STORAGE_BUCKET` | Tên bucket, mặc định `uploads`. Bucket phải để **Public** |
+   | `JPA_DDL_AUTO` | Đặt `validate` trên môi trường thật: schema do Flyway quản lý, Hibernate chỉ kiểm tra |
    | `JPA_SHOW_SQL` | Mặc định `false`; bật `true` khi cần debug SQL |
 
    Key OpenAI được đọc từ bảng `app_config` (dòng `config_key = 'OPENAI_API_KEY'`), không nằm trong file cấu hình.
+
+   **Schema database** do Flyway quản lý ([`db/migration`](src/main/resources/db/migration)). Lần đầu chạy trên database có sẵn, Flyway đánh dấu nó là V1 rồi chạy V2 trở đi; database trống sẽ chạy cả V1. Muốn đổi bảng/cột: thêm file `V<số tiếp theo>__mo_ta.sql`, **không sửa** file migration đã chạy.
 
 2. Chạy:
 
@@ -91,13 +95,23 @@ npm run build
 
 | Endpoint | Quyền |
 |---|---|
-| `/auth/**`, `GET /hotels/**`, `GET /rooms/**`, `/api/webhook/**` (có API key) | Công khai |
-| `/api/chat`, `/bookings/**`, `/notifications/**`, `/api/reviews`, `/users/me` | Đăng nhập |
-| `/admin/**`, `/users/**`, `/api/images/**`, `POST/PUT/DELETE /hotels/**`, `POST/DELETE /rooms/**` | `ADMIN` |
+| `/auth/**`, `GET /hotels/**` (gồm `/hotels/{id}/reviews`), `GET /rooms/**`, `/api/webhook/**` (có API key) | Công khai |
+| `/api/chat`, `/bookings/**`, `/notifications/**`, `POST /api/reviews`, `/users/me/**`, `/wishlist/**` | Đăng nhập |
+| `/admin/**`, `/users/**`, `/api/images/**`, `POST/PUT/DELETE /hotels/**`, `POST/PUT/DELETE /rooms/**` | `ADMIN` |
+
+Giới hạn chống dò mật khẩu/spam (theo tài khoản/email, lưu trong bộ nhớ): đăng nhập sai 5 lần khóa 15 phút; mỗi loại OTP tối đa 3 lần / 15 phút. Vượt giới hạn trả HTTP 429.
+
+## Quy tắc nghiệp vụ chính
+
+- Booking `PENDING` chưa thanh toán tự hủy sau **30 phút** ([`BookingExpiryService`](src/main/java/com/Nhom2/booking/service/BookingExpiryService.java)). Tiền về sau khi đã hủy sẽ báo admin để hoàn.
+- Không hủy được từ ngày nhận phòng trở đi; booking đã thanh toán phải gửi yêu cầu hủy để admin duyệt và hoàn tiền.
+- Chỉ khách có booking đã thanh toán tại khách sạn mới được đánh giá, mỗi người 1 lần; `rating_avg` tự tính lại sau mỗi đánh giá.
+- Mỗi email chỉ một tài khoản; đổi email phải xác nhận OTP gửi tới email mới.
 
 Quy tắc đầy đủ nằm trong [`SecurityConfig.java`](src/main/java/com/Nhom2/booking/config/SecurityConfig.java) và được kiểm tra bởi [`SecurityRulesTest`](src/test/java/com/Nhom2/booking/config/SecurityRulesTest.java).
 
 ## Deploy
 
-- **Backend**: Railway build từ [`Dockerfile`](Dockerfile). Khai báo đủ các biến môi trường ở bảng trên trong dashboard Railway.
+- **Backend**: Railway build từ [`Dockerfile`](Dockerfile). Khai báo đủ các biến môi trường ở bảng trên trong dashboard Railway (đặc biệt `SUPABASE_URL`, `SUPABASE_KEY`, `JPA_DDL_AUTO=validate`).
+- **CI**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy test backend và lint/build frontend cho mỗi push vào `main` và mỗi pull request.
 - **Frontend**: Vercel, thư mục gốc là `frontend/`.
