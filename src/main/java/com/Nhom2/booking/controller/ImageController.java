@@ -3,6 +3,7 @@ package com.Nhom2.booking.controller;
 import com.Nhom2.booking.entity.Hotel;
 import com.Nhom2.booking.entity.Room;
 import com.Nhom2.booking.entity.RoomImage;
+import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.RoomRepository;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +15,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -26,6 +29,9 @@ public class ImageController {
 
     // Thư mục lưu ảnh upload
     private static final String UPLOAD_DIR = "uploads";
+
+    // Uploads are served publicly by extension, so anything renderable as active content (html, svg) is refused.
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(".jpg", ".jpeg", ".png", ".webp", ".gif");
 
     public ImageController(HotelRepository hotelRepository, RoomRepository roomRepository) {
         this.hotelRepository = hotelRepository;
@@ -42,7 +48,7 @@ public class ImageController {
             @RequestParam("file") MultipartFile file
     ) {
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new RuntimeException("Hotel not found: " + hotelId));
+                .orElseThrow(() -> new NotFoundException("Hotel not found: " + hotelId));
 
         String imageUrl = saveFile(file, "hotels");
         hotel.setImageUrl(imageUrl);
@@ -64,7 +70,7 @@ public class ImageController {
             @RequestParam("file") MultipartFile file
     ) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new RuntimeException("Room not found: " + roomId));
+                .orElseThrow(() -> new NotFoundException("Room not found: " + roomId));
 
         String imageUrl = saveFile(file, "rooms");
 
@@ -92,6 +98,7 @@ public class ImageController {
         if (file.isEmpty()) {
             throw new RuntimeException("File rỗng!");
         }
+        String extension = resolveImageExtension(file.getOriginalFilename());
 
         try {
             // Tạo thư mục nếu chưa có
@@ -99,11 +106,6 @@ public class ImageController {
             Files.createDirectories(uploadPath);
 
             // Tạo tên file unique
-            String originalName = file.getOriginalFilename();
-            String extension = "";
-            if (originalName != null && originalName.contains(".")) {
-                extension = originalName.substring(originalName.lastIndexOf("."));
-            }
             String newFileName = UUID.randomUUID().toString() + extension;
 
             // Lưu file
@@ -114,7 +116,19 @@ public class ImageController {
             return "/" + UPLOAD_DIR + "/" + subDir + "/" + newFileName;
 
         } catch (IOException e) {
-            throw new RuntimeException("Lỗi khi lưu file: " + e.getMessage());
+            throw new IllegalStateException("Lỗi khi lưu file: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * Trả về phần mở rộng (lowercase, có dấu chấm) nếu là định dạng ảnh được phép.
+     */
+    static String resolveImageExtension(String originalName) {
+        int dotIndex = originalName == null ? -1 : originalName.lastIndexOf('.');
+        String extension = dotIndex < 0 ? "" : originalName.substring(dotIndex).toLowerCase(Locale.ROOT);
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new RuntimeException("Chỉ chấp nhận ảnh định dạng: " + String.join(", ", ALLOWED_IMAGE_EXTENSIONS));
+        }
+        return extension;
     }
 }

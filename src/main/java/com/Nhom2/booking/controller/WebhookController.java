@@ -2,6 +2,8 @@ package com.Nhom2.booking.controller;
 
 import com.Nhom2.booking.dto.SepayWebhookRequest;
 import com.Nhom2.booking.service.PaymentService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -15,6 +17,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/webhook")
 public class WebhookController {
+
+    private static final Logger log = LoggerFactory.getLogger(WebhookController.class);
 
     private final PaymentService paymentService;
 
@@ -51,6 +55,7 @@ public class WebhookController {
             }
 
         } catch (Exception e) {
+            log.error("[Webhook] Failed to process Sepay transaction", e);
             // Luôn trả 200 để Sepay không retry liên tục
             return ResponseEntity.ok(Map.of(
                     "success", false,

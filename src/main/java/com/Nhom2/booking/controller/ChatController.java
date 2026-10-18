@@ -2,7 +2,8 @@ package com.Nhom2.booking.controller;
 
 import com.Nhom2.booking.entity.AppConfig;
 import com.Nhom2.booking.repository.AppConfigRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,23 +15,42 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/chat")
-@CrossOrigin(origins = "*")
 public class ChatController {
 
-    @Autowired
-    private AppConfigRepository configRepository;
+    private static final Logger log = LoggerFactory.getLogger(ChatController.class);
+
+    // Clients may only replay the conversation; the system prompt is always built server-side.
+    private static final Set<String> ALLOWED_ROLES = Set.of("user", "assistant");
+    static final int MAX_MESSAGES = 20;
+    static final int MAX_MESSAGE_LENGTH = 2000;
+    private static final int MAX_HOTEL_FIELD_LENGTH = 500;
+
+    private final AppConfigRepository configRepository;
+    private final RestTemplate restTemplate;
+
+    public ChatController(AppConfigRepository configRepository, RestTemplate restTemplate) {
+        this.configRepository = configRepository;
+        this.restTemplate = restTemplate;
+    }
 
     @PostMapping
     @SuppressWarnings("unchecked")
     public ResponseEntity<?> chatWithAI(@RequestBody ChatRequest request) {
+        List<Map<String, String>> conversation = sanitizeMessages(request.getMessages());
+        if (conversation.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("reply", "Tin nhắn không hợp lệ."));
+        }
+
         try {
             AppConfig apiKeyConfig = configRepository.findById("OPENAI_API_KEY")
-                    .orElseThrow(() -> new RuntimeException("OPENAI_API_KEY not found"));
+                    .orElseThrow(() -> new IllegalStateException("OPENAI_API_KEY not found"));
             String openAiApiKey = apiKeyConfig.getConfigValue();
 
+            Map<String, Object> hotelInfo = request.getHotelInfo() == null ? Map.of() : request.getHotelInfo();
             String systemPrompt = String.format(
                 """
                 Bạn là Trợ lý AI Booking của hệ thống đặt phòng khách sạn Nhóm 2.
@@ -63,19 +83,19 @@ public class ChatController {
                 - KHÔNG được nói "không có thông tin" vì bạn đã có đủ dữ liệu ở trên
                 - Giá hiển thị dạng: 1.200.000đ/đêm
                 """,
-                request.getHotelInfo().get("name"),
-                request.getHotelInfo().get("city"),
-                request.getHotelInfo().get("ratingAvg"),
-                request.getHotelInfo().get("description")
+                hotelField(hotelInfo, "name"),
+                hotelField(hotelInfo, "city"),
+                hotelField(hotelInfo, "ratingAvg"),
+                hotelField(hotelInfo, "description")
             );
 
             List<Map<String, String>> openAiMessages = new ArrayList<>();
             Map<String, String> systemMessage = new HashMap<>();
             systemMessage.put("role", "system");
             systemMessage.put("content", systemPrompt);
-            
+
             openAiMessages.add(systemMessage);
-            openAiMessages.addAll(request.getMessages());
+            openAiMessages.addAll(conversation);
 
             Map<String, Object> openAiRequestBody = new HashMap<>();
             openAiRequestBody.put("model", "gpt-3.5-turbo");
@@ -87,8 +107,7 @@ public class ChatController {
             headers.setBearerAuth(openAiApiKey);
 
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(openAiRequestBody, headers);
-            RestTemplate restTemplate = new RestTemplate();
-            
+
             @SuppressWarnings("rawtypes")
             ResponseEntity<Map> response = restTemplate.postForEntity(
                 "https://api.openai.com/v1/chat/completions", entity, Map.class
@@ -97,16 +116,43 @@ public class ChatController {
             Map<String, Object> responseBody = response.getBody();
             List<Map<String, Object>> choices = (List<Map<String, Object>>) responseBody.get("choices");
             Map<String, Object> message = (Map<String, Object>) choices.get(0).get("message");
-            
+
             Map<String, String> result = new HashMap<>();
             result.put("reply", (String) message.get("content"));
-            
+
             return ResponseEntity.ok(result);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Chat request to OpenAI failed", e);
             return ResponseEntity.status(500).body(Map.of("reply", "Lỗi kết nối từ Backend tới AI."));
         }
+    }
+
+    /**
+     * Keeps only user/assistant turns with non-blank content, the most recent {@link #MAX_MESSAGES},
+     * each truncated to {@link #MAX_MESSAGE_LENGTH} characters.
+     */
+    static List<Map<String, String>> sanitizeMessages(List<Map<String, String>> messages) {
+        if (messages == null) {
+            return List.of();
+        }
+
+        List<Map<String, String>> valid = messages.stream()
+                .filter(m -> m != null && ALLOWED_ROLES.contains(m.get("role")))
+                .filter(m -> m.get("content") != null && !m.get("content").isBlank())
+                .map(m -> Map.of("role", m.get("role"), "content", truncate(m.get("content"), MAX_MESSAGE_LENGTH)))
+                .toList();
+
+        return valid.subList(Math.max(0, valid.size() - MAX_MESSAGES), valid.size());
+    }
+
+    private static String hotelField(Map<String, Object> hotelInfo, String key) {
+        Object value = hotelInfo.get(key);
+        return value == null ? "" : truncate(String.valueOf(value), MAX_HOTEL_FIELD_LENGTH);
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 
     public static class ChatRequest {

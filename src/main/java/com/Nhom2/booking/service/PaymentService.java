@@ -5,9 +5,13 @@ import com.Nhom2.booking.dto.SepayWebhookRequest;
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.exception.ForbiddenException;
+import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -15,12 +19,18 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 public class PaymentService {
+
+    private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
+
+    private static final List<String> SEPAY_AUTH_SCHEMES = List.of("Apikey ", "Bearer ");
 
     // TPBank BIN code theo chuẩn VietQR
     private static final String BANK_BIN = "970423";
@@ -70,7 +80,7 @@ public class PaymentService {
 
         // Chỉ chủ booking mới được xem QR
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only access your own booking");
+            throw new ForbiddenException("You can only access your own booking");
         }
 
         // Chỉ booking CONFIRMED hoặc PENDING + UNPAID mới được thanh toán
@@ -121,7 +131,7 @@ public class PaymentService {
         Booking booking = getBooking(bookingId);
 
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only access your own booking");
+            throw new ForbiddenException("You can only access your own booking");
         }
 
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
@@ -151,28 +161,37 @@ public class PaymentService {
      * API key được cấu hình trong Sepay Dashboard và application.properties.
      */
     public boolean verifySepayApiKey(String authorization) {
-        // Nếu chưa cấu hình API key → bỏ qua xác thực (dev mode)
+        // Fail closed: an unconfigured key must never let anonymous callers mark bookings as paid.
         if (sepayApiKey == null || sepayApiKey.isBlank()) {
-            System.out.println("[Webhook] WARNING: No Sepay API key configured, skipping auth check");
-            return true;
-        }
-
-        if (authorization == null || authorization.isBlank()) {
-            System.out.println("[Webhook] ERROR: Missing Authorization header");
+            log.error("[Webhook] Rejected: payment.sepay.api-key is not configured");
             return false;
         }
 
-        // Sepay gửi header: "Apikey <api_key>"
-        String token = authorization.replace("Apikey ", "")
-                .replace("Bearer ", "")
-                .trim();
-        boolean valid = sepayApiKey.equals(token);
+        if (authorization == null || authorization.isBlank()) {
+            log.warn("[Webhook] Rejected: missing Authorization header");
+            return false;
+        }
+
+        String token = stripAuthScheme(authorization.trim());
+        boolean valid = MessageDigest.isEqual(
+                sepayApiKey.getBytes(StandardCharsets.UTF_8),
+                token.getBytes(StandardCharsets.UTF_8));
 
         if (!valid) {
-            System.out.println("[Webhook] ERROR: Invalid API key");
+            log.warn("[Webhook] Rejected: invalid API key");
         }
 
         return valid;
+    }
+
+    // Sepay sends "Apikey <key>"; "Bearer <key>" is accepted for manual testing.
+    private String stripAuthScheme(String authorization) {
+        for (String scheme : SEPAY_AUTH_SCHEMES) {
+            if (authorization.regionMatches(true, 0, scheme, 0, scheme.length())) {
+                return authorization.substring(scheme.length()).trim();
+            }
+        }
+        return authorization;
     }
 
     /**
@@ -188,31 +207,30 @@ public class PaymentService {
     public boolean processWebhookPayment(SepayWebhookRequest request) {
         // Chỉ xử lý giao dịch tiền VÀO (transferType = "in")
         if (!"in".equalsIgnoreCase(request.getTransferType())) {
-            System.out.println("[Webhook] Skipped: not an incoming transfer");
+            log.info("[Webhook] Skipped: not an incoming transfer");
             return false;
         }
 
         String content = request.getContent();
         if (content == null || content.isBlank()) {
-            System.out.println("[Webhook] Skipped: empty transfer content");
+            log.info("[Webhook] Skipped: empty transfer content");
             return false;
         }
 
-        System.out.println("[Webhook] Received transaction: amount="
-                + request.getTransferAmount()
-                + ", content=\"" + content + "\"");
+        log.info("[Webhook] Received transaction: amount={}, content=\"{}\"",
+                request.getTransferAmount(), content);
 
         // Trích xuất booking ID từ nội dung: "DH 123" → 123
         Long bookingId = extractBookingId(content);
         if (bookingId == null) {
-            System.out.println("[Webhook] Skipped: no booking ID found in content");
+            log.info("[Webhook] Skipped: no booking ID found in content");
             return false;
         }
 
         // Tìm booking
         Optional<Booking> optionalBooking = bookingRepository.findById(bookingId);
         if (optionalBooking.isEmpty()) {
-            System.out.println("[Webhook] Skipped: booking #" + bookingId + " not found");
+            log.info("[Webhook] Skipped: booking #{} not found", bookingId);
             return false;
         }
 
@@ -220,13 +238,13 @@ public class PaymentService {
 
         // Kiểm tra booking đã CONFIRMED hoặc PENDING và chưa PAID
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
-            System.out.println("[Webhook] Skipped: booking #" + bookingId
-                    + " status is " + booking.getStatus() + " (need CONFIRMED or PENDING)");
+            log.info("[Webhook] Skipped: booking #{} status is {} (need CONFIRMED or PENDING)",
+                    bookingId, booking.getStatus());
             return false;
         }
 
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
-            System.out.println("[Webhook] Skipped: booking #" + bookingId + " already paid");
+            log.info("[Webhook] Skipped: booking #{} already paid", bookingId);
             return false;
         }
 
@@ -236,9 +254,8 @@ public class PaymentService {
                 ? request.getTransferAmount() : 0;
 
         if (receivedAmount < expectedAmount) {
-            System.out.println("[Webhook] WARNING: booking #" + bookingId
-                    + " received " + receivedAmount
-                    + " but expected " + expectedAmount);
+            log.warn("[Webhook] Booking #{} received {} but expected {}",
+                    bookingId, receivedAmount, expectedAmount);
 
             // Vẫn thông báo admin để xử lý thủ công
             notificationService.notifyAdmins(
@@ -255,9 +272,8 @@ public class PaymentService {
         booking.setPaymentStatus(PaymentStatus.PAID);
         bookingRepository.save(booking);
 
-        System.out.println("[Webhook] ✅ Booking #" + bookingId
-                + " auto-confirmed PAID (received: "
-                + receivedAmount + " VND)");
+        log.info("[Webhook] Booking #{} auto-confirmed PAID (received: {} VND)",
+                bookingId, receivedAmount);
 
         // Thông báo cho user
         notificationService.create(
@@ -297,13 +313,13 @@ public class PaymentService {
 
     private Booking getBooking(Long bookingId) {
         return bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+                .orElseThrow(() -> new NotFoundException("Booking not found"));
     }
 
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext()
                 .getAuthentication().getName();
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NotFoundException("User not found"));
     }
 }
