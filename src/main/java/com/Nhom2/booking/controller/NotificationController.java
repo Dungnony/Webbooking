@@ -2,6 +2,8 @@ package com.Nhom2.booking.controller;
 
 import com.Nhom2.booking.entity.Notification;
 import com.Nhom2.booking.service.NotificationService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -28,5 +30,11 @@ public class NotificationController {
     @PutMapping("/{notificationId}/read")
     public Notification markAsRead(@PathVariable Long notificationId) {
         return notificationService.markAsRead(notificationId);
+    }
+
+    @DeleteMapping("/{notificationId}")
+    public ResponseEntity<Void> delete(@PathVariable Long notificationId) {
+        notificationService.delete(notificationId);
+        return ResponseEntity.noContent().build();
     }
 }

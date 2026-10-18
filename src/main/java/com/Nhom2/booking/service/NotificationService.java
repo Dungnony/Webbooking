@@ -3,6 +3,8 @@ package com.Nhom2.booking.service;
 import com.Nhom2.booking.entity.Notification;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
+import com.Nhom2.booking.exception.ForbiddenException;
+import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.NotificationRepository;
 import com.Nhom2.booking.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -48,16 +50,24 @@ public class NotificationService {
     }
 
     public Notification markAsRead(Long notificationId) {
-        User user = getCurrentUser();
-        Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-
-        if (!notification.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only update your own notification");
-        }
-
+        Notification notification = getOwnNotification(notificationId);
         notification.setRead(true);
         return notificationRepository.save(notification);
+    }
+
+    public void delete(Long notificationId) {
+        notificationRepository.delete(getOwnNotification(notificationId));
+    }
+
+    private Notification getOwnNotification(Long notificationId) {
+        User user = getCurrentUser();
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new NotFoundException("Notification not found"));
+
+        if (!notification.getUser().getId().equals(user.getId())) {
+            throw new ForbiddenException("You can only access your own notification");
+        }
+        return notification;
     }
 
     private User getCurrentUser() {
@@ -66,6 +76,6 @@ public class NotificationService {
                 .getName();
 
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NotFoundException("User not found"));
     }
 }
