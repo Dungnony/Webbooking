@@ -236,10 +236,19 @@ public class PaymentService {
 
         Booking booking = optionalBooking.get();
 
+        long receivedAmount = request.getTransferAmount() != null
+                ? request.getTransferAmount() : 0;
+
         // Kiểm tra booking đã CONFIRMED hoặc PENDING và chưa PAID
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
-            log.info("[Webhook] Skipped: booking #{} status is {} (need CONFIRMED or PENDING)",
-                    bookingId, booking.getStatus());
+            log.warn("[Webhook] Booking #{} is {} but received {} VND",
+                    bookingId, booking.getStatus(), receivedAmount);
+            // Money arrived after the booking expired or was cancelled: someone has to refund it.
+            notificationService.notifyAdmins(
+                    "Payment for inactive booking",
+                    "Booking #" + bookingId + " is " + booking.getStatus()
+                            + " but received " + String.format("%,d", receivedAmount) + " VND."
+                            + " Please refund or restore the booking manually.");
             return false;
         }
 
@@ -250,8 +259,6 @@ public class PaymentService {
 
         // Kiểm tra số tiền (cho phép >= totalPrice để tránh sai lệch nhỏ)
         long expectedAmount = booking.getTotalPrice().longValue();
-        long receivedAmount = request.getTransferAmount() != null
-                ? request.getTransferAmount() : 0;
 
         if (receivedAmount < expectedAmount) {
             log.warn("[Webhook] Booking #{} received {} but expected {}",

@@ -10,6 +10,8 @@ import type { BookingFlowState } from '../types/bookingFlow';
 import { getErrorMessage } from '../utils/errors';
 
 const PAYMENT_POLL_INTERVAL_MS = 3000;
+// Must match BookingExpiryService.PAYMENT_WINDOW on the backend.
+const PAYMENT_WINDOW_MINUTES = 30;
 
 const PaymentPage: React.FC = () => {
   const state = useLocation().state as BookingFlowState | null;
@@ -244,7 +246,7 @@ const PaymentPage: React.FC = () => {
         {/* Notice */}
         <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: 14, marginTop: 16, fontSize: 13, color: '#0050b3', display: 'flex', alignItems: 'center', gap: 10 }}>
           <Spin indicator={<LoadingOutlined style={{ fontSize: 18 }} spin />} />
-          <span><strong>Hệ thống đang tự động kiểm tra thanh toán...</strong> Bạn hãy thực hiện chuyển khoản, đơn phòng sẽ tự động hoàn tất trong 1-3 phút. Nếu đợi lâu, bạn có thể nhấn xác nhận thủ công.</span>
+          <span><strong>Hệ thống đang tự động kiểm tra thanh toán...</strong> Bạn hãy thực hiện chuyển khoản, đơn phòng sẽ tự động hoàn tất trong 1-3 phút. Nếu đợi lâu, bạn có thể nhấn xác nhận thủ công. Đơn chưa thanh toán sẽ tự hủy sau {PAYMENT_WINDOW_MINUTES} phút kể từ lúc đặt.</span>
         </div>
 
         {/* Action buttons */}
