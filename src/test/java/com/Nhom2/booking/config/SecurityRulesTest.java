@@ -12,6 +12,7 @@ import com.Nhom2.booking.repository.AppConfigRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.RoomRepository;
 import com.Nhom2.booking.security.JwtUtil;
+import com.Nhom2.booking.service.ImageStorageService;
 import com.Nhom2.booking.service.ReviewService;
 import com.Nhom2.booking.service.RoomService;
 import com.Nhom2.booking.service.UserService;
@@ -57,6 +58,9 @@ class SecurityRulesTest {
 
     @MockitoBean
     private ReviewService reviewService;
+
+    @MockitoBean
+    private ImageStorageService imageStorageService;
 
     @MockitoBean
     private AppConfigRepository appConfigRepository;
