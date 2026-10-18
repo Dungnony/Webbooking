@@ -1,15 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
-interface WishlistContextType {
-  wishlist: number[];
-  addWish: (id: number | string) => void;
-  removeWish: (id: number | string) => void;
-  toggleWish: (id: number | string) => void;
-  clearAll: () => void;
-  isInWishlist: (id: number | string) => boolean;
-}
-
-const WishlistContext = createContext<WishlistContextType | undefined>(undefined);
+import React, { useState, useEffect } from 'react';
+import { WishlistContext } from './wishlistContextValue';
 
 export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [wishlist, setWishlist] = useState<number[]>(() => {
@@ -60,12 +50,4 @@ export const WishlistProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       {children}
     </WishlistContext.Provider>
   );
-};
-
-export const useWishlist = () => {
-  const context = useContext(WishlistContext);
-  if (context === undefined) {
-    throw new Error('useWishlist must be used within a WishlistProvider');
-  }
-  return context;
 };

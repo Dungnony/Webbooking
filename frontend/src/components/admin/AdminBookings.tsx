@@ -1,26 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Table, Tag, Button, Spin, Empty, message, Modal, Input, Card, Select } from 'antd';
 import { CheckOutlined, CloseOutlined, DollarOutlined } from '@ant-design/icons';
-import { adminApi } from '../../api';
+import { adminApi, BookingStatus } from '../../api';
+import type { Booking } from '../../api-generated';
 import { cachedFetch, invalidateCachePrefix } from '../../utils/apiCache';
 
+const BOOKINGS_CACHE_TTL_MS = 15_000;
+
 const AdminBookings: React.FC = () => {
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<any>(null);
+  const [filterStatus, setFilterStatus] = useState<BookingStatus | undefined>(undefined);
 
   // Modal từ chối
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [currentBookingId, setCurrentBookingId] = useState<number | null>(null);
 
-  const loadBookings = async () => {
+  const loadBookings = useCallback(async () => {
     setLoading(true);
     try {
       const data = await cachedFetch(
         `admin_bookings_${filterStatus || 'all'}`,
         () => adminApi.getBookings(filterStatus),
-        15_000 // Cache 15 giây
+        BOOKINGS_CACHE_TTL_MS
       );
       setBookings(data || []);
     } catch (err) {
@@ -29,11 +32,11 @@ const AdminBookings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterStatus]);
 
   useEffect(() => {
     loadBookings();
-  }, [filterStatus]);
+  }, [loadBookings]);
 
   const handleApprove = async (id: number) => {
     try {
@@ -80,7 +83,7 @@ const AdminBookings: React.FC = () => {
     }
   };
 
-  const getStatusTag = (status: string) => {
+  const getStatusTag = (status?: string) => {
     switch (status) {
       case 'PENDING': return <Tag color="orange" style={{ borderRadius: 12, padding: '2px 10px', fontWeight: 600 }}>Chờ duyệt</Tag>;
       case 'CONFIRMED': return <Tag color="green" style={{ borderRadius: 12, padding: '2px 10px', fontWeight: 600 }}>Đã duyệt</Tag>;
@@ -90,7 +93,7 @@ const AdminBookings: React.FC = () => {
     }
   };
 
-  const getPaymentStatusTag = (status: string) => {
+  const getPaymentStatusTag = (status?: string) => {
     switch (status) {
       case 'UNPAID': return <Tag color="volcano" style={{ borderRadius: 12, padding: '2px 10px', fontWeight: 600 }}>Chưa thanh toán</Tag>;
       case 'PAID': return <Tag color="cyan" style={{ borderRadius: 12, padding: '2px 10px', fontWeight: 600 }}>Đã thanh toán</Tag>;
@@ -104,17 +107,17 @@ const AdminBookings: React.FC = () => {
     {
       title: <span style={{ color: '#595959', fontWeight: 700 }}>Khách hàng</span>,
       key: 'user',
-      render: (_: any, record: any) => <span style={{ fontWeight: 600, color: '#1a1a1a' }}>{record.user?.username || 'N/A'}</span>
+      render: (_: unknown, record: Booking) => <span style={{ fontWeight: 600, color: '#1a1a1a' }}>{record.user?.username || 'N/A'}</span>
     },
     {
       title: <span style={{ color: '#595959', fontWeight: 700 }}>Khách sạn</span>,
       key: 'hotel',
-      render: (_: any, record: any) => <span style={{ color: '#1a1a1a', fontWeight: 500 }}>{record.hotel?.name || 'N/A'}</span>
+      render: (_: unknown, record: Booking) => <span style={{ color: '#1a1a1a', fontWeight: 500 }}>{record.hotel?.name || 'N/A'}</span>
     },
     {
       title: <span style={{ color: '#595959', fontWeight: 700 }}>Thời gian</span>,
       key: 'dates',
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: Booking) => (
         <div style={{ fontSize: 13, color: '#595959' }}>
           <div><span style={{ color: '#8c8c8c' }}>In:</span> <b style={{ color: '#1a1a1a' }}>{record.checkInDate}</b></div>
           <div><span style={{ color: '#8c8c8c' }}>Out:</span> <b style={{ color: '#1a1a1a' }}>{record.checkOutDate}</b></div>
@@ -130,7 +133,7 @@ const AdminBookings: React.FC = () => {
     {
       title: <span style={{ color: '#595959', fontWeight: 700 }}>Trạng thái</span>,
       key: 'status',
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: Booking) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
           {getStatusTag(record.status)}
           {getPaymentStatusTag(record.paymentStatus)}
@@ -141,21 +144,25 @@ const AdminBookings: React.FC = () => {
     {
       title: <span style={{ color: '#595959', fontWeight: 700 }}>Hành động</span>,
       key: 'action',
-      render: (_: any, record: any) => (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {record.status === 'PENDING' && (
-            <>
-              <Button size="small" type="primary" style={{ borderRadius: 6, fontWeight: 600, background: '#1890ff' }} icon={<CheckOutlined />} onClick={() => handleApprove(record.id)}>Duyệt</Button>
-              <Button size="small" danger style={{ borderRadius: 6, fontWeight: 600 }} icon={<CloseOutlined />} onClick={() => openRejectModal(record.id)}>Từ chối</Button>
-            </>
-          )}
-          {record.paymentStatus === 'UNPAID' && record.status !== 'CANCELLED' && record.status !== 'REJECTED' && (
-            <Button size="small" icon={<DollarOutlined />} style={{ borderRadius: 6, fontWeight: 600, color: '#52c41a', borderColor: '#b7eb8f', background: '#f6ffed' }} onClick={() => handleMarkPaid(record.id)}>
-              Đã thu tiền
-            </Button>
-          )}
-        </div>
-      )
+      render: (_: unknown, record: Booking) => {
+        const bookingId = record.id;
+        if (bookingId === undefined) return null;
+        return (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {record.status === 'PENDING' && (
+              <>
+                <Button size="small" type="primary" style={{ borderRadius: 6, fontWeight: 600, background: '#1890ff' }} icon={<CheckOutlined />} onClick={() => handleApprove(bookingId)}>Duyệt</Button>
+                <Button size="small" danger style={{ borderRadius: 6, fontWeight: 600 }} icon={<CloseOutlined />} onClick={() => openRejectModal(bookingId)}>Từ chối</Button>
+              </>
+            )}
+            {record.paymentStatus === 'UNPAID' && record.status !== 'CANCELLED' && record.status !== 'REJECTED' && (
+              <Button size="small" icon={<DollarOutlined />} style={{ borderRadius: 6, fontWeight: 600, color: '#52c41a', borderColor: '#b7eb8f', background: '#f6ffed' }} onClick={() => handleMarkPaid(bookingId)}>
+                Đã thu tiền
+              </Button>
+            )}
+          </div>
+        );
+      }
     },
   ];
 

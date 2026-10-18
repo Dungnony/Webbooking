@@ -4,17 +4,23 @@ import { Button, Spin, message, Divider } from 'antd';
 import { CheckCircleOutlined, CopyOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { paymentApi, bookingApi } from '../api';
+import { paymentApi, bookingApi, PaymentQr } from '../api';
+import type { Booking } from '../api-generated';
+import type { BookingFlowState } from '../types/bookingFlow';
+import { getErrorMessage } from '../utils/errors';
+
+const PAYMENT_POLL_INTERVAL_MS = 3000;
 
 const PaymentPage: React.FC = () => {
-  const { state } = useLocation() as { state: any };
+  const state = useLocation().state as BookingFlowState | null;
   const navigate = useNavigate();
-  const [qrData, setQrData] = useState<any>(null);
+  const [qrData, setQrData] = useState<PaymentQr | null>(null);
   const [loadingQr, setLoadingQr] = useState(true);
   const [confirming, setConfirming] = useState(false);
-  const [currentBooking, setCurrentBooking] = useState<any>(state?.booking);
+  const [currentBooking, setCurrentBooking] = useState<Booking | undefined>(state?.booking);
 
   const booking = currentBooking;
+  const bookingId = booking?.id;
   const hotel = state?.hotel;
   const checkIn = state?.checkIn;
   const checkOut = state?.checkOut;
@@ -22,33 +28,28 @@ const PaymentPage: React.FC = () => {
   const totalPrice = state?.totalPrice;
 
   // Tải QR thanh toán
-  const loadQr = (bookingId: number) => {
-    setLoadingQr(true);
-    paymentApi.getPaymentQr(bookingId)
-      .then((data: any) => setQrData(data))
-      .catch((e: any) => {
-        message.error('Không thể tải mã QR: ' + (e?.message || 'Lỗi không xác định'));
-      })
-      .finally(() => setLoadingQr(false));
-  };
-
   useEffect(() => {
-    if (!booking?.id) {
+    if (bookingId === undefined) {
       navigate('/');
       return;
     }
-    // Booking giờ luôn CONFIRMED, tải QR ngay
-    loadQr(booking.id);
-  }, [booking?.id]);
+    setLoadingQr(true);
+    paymentApi.getPaymentQr(bookingId)
+      .then(data => setQrData(data))
+      .catch(e => {
+        message.error('Không thể tải mã QR: ' + getErrorMessage(e, 'Lỗi không xác định'));
+      })
+      .finally(() => setLoadingQr(false));
+  }, [bookingId, navigate]);
 
   // Tự động kiểm tra thanh toán (polling 3s)
   useEffect(() => {
-    if (!booking?.id) return;
+    if (bookingId === undefined) return;
 
     const interval = setInterval(async () => {
       try {
         const res = await bookingApi.getMy();
-        const updated = res.data?.find((b: any) => b.id === booking.id);
+        const updated = res.data?.find(b => b.id === bookingId);
         if (!updated) return;
 
         // Cập nhật trạng thái booking
@@ -61,25 +62,26 @@ const PaymentPage: React.FC = () => {
           navigate('/booking/confirmation', { state: { ...state, booking: updated } });
         }
       } catch (e) {
-        console.log('Đang chờ cập nhật...');
+        console.warn('Payment status poll failed, retrying', e);
       }
-    }, 3000);
+    }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [booking?.id, navigate, state]);
+  }, [bookingId, navigate, state]);
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => message.success(`Đã sao chép ${label}!`));
   };
 
   const handleConfirmPayment = async () => {
+    if (bookingId === undefined) return;
     setConfirming(true);
     try {
-      await paymentApi.confirmPayment(booking.id);
+      await paymentApi.confirmPayment(bookingId);
       message.success('Đã gửi xác nhận thanh toán tới Admin!');
       navigate('/booking/confirmation', { state });
-    } catch (e: any) {
-      message.error(e?.message || 'Xác nhận thất bại, vui lòng thử lại!');
+    } catch (e) {
+      message.error(getErrorMessage(e, 'Xác nhận thất bại, vui lòng thử lại!'));
     } finally {
       setConfirming(false);
     }
@@ -92,7 +94,7 @@ const PaymentPage: React.FC = () => {
 
   return (
     <div className="page-wrapper" style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-      <Header showSearch />
+      <Header />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 24px 48px' }}>
         {/* Steps indicator */}

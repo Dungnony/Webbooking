@@ -1,9 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { message } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
 import {
-  ArrowLeftOutlined, 
-  UserOutlined, 
+  UserOutlined,
   DashboardOutlined, 
   BookOutlined,
   BankOutlined,
@@ -20,19 +17,9 @@ import AdminHotels from '../components/admin/AdminHotels';
 
 type TabKey = 'overview' | 'users' | 'hotels' | 'bookings' | 'requests';
 
+// Access is restricted to admins by <AuthGuard requiredRole="ADMIN"> in App.tsx.
 const AdminDashboard: React.FC = () => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('role');
-    if (!token || role !== 'ADMIN') {
-      message.error('Bạn không có quyền truy cập trang quản trị!');
-      navigate('/');
-      return;
-    }
-  }, [navigate]);
 
   const renderContent = () => {
     switch (activeTab) {

@@ -7,12 +7,27 @@ import {
   DollarOutlined,
   ReconciliationOutlined
 } from '@ant-design/icons';
-import { adminApi } from '../../api';
+import { adminApi, AdminOverview as OverviewStats } from '../../api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import type { PieLabelRenderProps } from 'recharts';
 import { cachedFetch } from '../../utils/apiCache';
+import { getErrorMessage } from '../../utils/errors';
 
-const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+interface MonthlyRevenue {
+  month: number;
+  year: number;
+  name: string;
+  revenue: number;
+}
+
+const renderCustomizedLabel = (props: PieLabelRenderProps) => {
+  const percent = props.percent ?? 0;
   if (percent === 0) return null;
+  const cx = Number(props.cx ?? 0);
+  const cy = Number(props.cy ?? 0);
+  const innerRadius = Number(props.innerRadius ?? 0);
+  const outerRadius = Number(props.outerRadius ?? 0);
+  const midAngle = props.midAngle ?? 0;
   const RADIAN = Math.PI / 180;
   const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
   const x = cx + radius * Math.cos(-midAngle * RADIAN);
@@ -26,11 +41,11 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 };
 
 const AdminOverview: React.FC = () => {
-  const [stats, setStats] = useState<any>(null);
+  const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<MonthlyRevenue[]>([]);
 
   const pieData = [
     { name: 'Chờ duyệt', value: stats?.pendingBookings || 12 },
@@ -56,10 +71,10 @@ const AdminOverview: React.FC = () => {
       setStats(statsData || { totalRevenue: 845000000, totalBookings: 145, pendingBookings: 12 });
 
       // Cache danh sách booking 30 giây
-      const bookings = await cachedFetch('admin_bookings_all', () => adminApi.getBookings(), 30_000) as any[];
-      
+      const bookings = await cachedFetch('admin_bookings_all', () => adminApi.getBookings(), 30_000);
+
       const fakeRevenues = [85000000, 112000000, 98000000, 135000000, 185000000, 0];
-      const months = Array.from({ length: 6 }).map((_, i) => {
+      const months: MonthlyRevenue[] = Array.from({ length: 6 }).map((_, i) => {
         const d = new Date();
         d.setMonth(d.getMonth() - (5 - i));
         return {
@@ -70,9 +85,10 @@ const AdminOverview: React.FC = () => {
         };
       });
 
-      bookings.forEach((b: any) => {
-        if (b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') {
-          const date = new Date(b.checkInDate || b.createdAt);
+      (bookings || []).forEach(b => {
+        const dateStr = b.checkInDate || b.createdAt;
+        if ((b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') && dateStr) {
+          const date = new Date(dateStr);
           const m = date.getMonth() + 1;
           const y = date.getFullYear();
           
@@ -94,18 +110,8 @@ const AdminOverview: React.FC = () => {
   const handleExportExcel = async () => {
     try {
       setExporting(true);
-      const token = localStorage.getItem('token');
-      // Tải file dạng blob để xử lý Auth header
-      const response = await fetch('http://localhost:8080/admin/reports/bookings.xlsx', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to export');
-
-      const blob = await response.blob();
+      // Tải file dạng blob qua API client để đi đúng proxy và tự gắn Auth header
+      const blob = await adminApi.exportBookingsExcel();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -117,7 +123,7 @@ const AdminOverview: React.FC = () => {
       
       message.success('Xuất báo cáo Excel thành công');
     } catch (error) {
-      message.error('Có lỗi xảy ra khi xuất báo cáo');
+      message.error(getErrorMessage(error, 'Có lỗi xảy ra khi xuất báo cáo'));
       console.error(error);
     } finally {
       setExporting(false);
@@ -242,7 +248,7 @@ const AdminOverview: React.FC = () => {
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#8c8c8c'}} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{fill: '#8c8c8c'}} tickFormatter={(value) => `${value / 1000000}M`} />
                   <Tooltip 
-                    formatter={(value: any) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value))}
+                    formatter={(value) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value))}
                     contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
                   <Area type="monotone" dataKey="revenue" stroke="#1890ff" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />

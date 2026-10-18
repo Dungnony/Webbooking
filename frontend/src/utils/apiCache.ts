@@ -14,7 +14,7 @@ interface CacheEntry<T> {
 }
 
 // In-memory cache (nhanh nhất, mất khi refresh trang)
-const memoryCache = new Map<string, CacheEntry<any>>();
+const memoryCache = new Map<string, CacheEntry<unknown>>();
 
 // TTL mặc định: 60 giây
 const DEFAULT_TTL = 60_000;

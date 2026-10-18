@@ -1,57 +1,14 @@
 import React from 'react';
+import { getHotelImage } from '../utils/imageUtils';
+import type { HotelWithStats } from '../api';
 
 interface HotelCardProps {
-  hotel: {
-    id: number | string;
-    name: string;
-    city?: string;
-    address?: string;
-    ratingAvg?: number;
-    description?: string;
-    status?: string;
-    imageUrl?: string;
-    rooms?: { pricePerNight?: number; images?: { imageUrl?: string }[] }[];
-    stars?: number;
-    reviewCount?: number;
-    type?: string;
-    oldPrice?: number;
-  };
+  hotel: HotelWithStats;
   onClick?: () => void;
   wished?: boolean;
   onWishToggle?: () => void;
   showPrice?: boolean;
   estimatedPrice?: number;
-}
-
-/**
- * Lấy URL ảnh đại diện cho hotel.
- * Ưu tiên: hotel.imageUrl → rooms[0].images[0].imageUrl → null
- */
-export function getHotelImage(hotel: any): string | null {
-  let url = null;
-  if (hotel?.imageUrl) {
-    url = hotel.imageUrl;
-  } else {
-    // Fallback: lấy ảnh từ phòng đầu tiên
-    const rooms = hotel?.rooms;
-    if (rooms && rooms.length > 0) {
-      for (const room of rooms) {
-        if (room.images && room.images.length > 0 && room.images[0].imageUrl) {
-          url = room.images[0].imageUrl;
-          break;
-        }
-      }
-    }
-  }
-
-  // Chuyển đổi link Google Drive nếu có để tránh lỗi 403 / bị chặn
-  if (url && url.includes('drive.google.com')) {
-    const match = url.match(/id=([^&]+)/);
-    if (match && match[1]) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
-    }
-  }
-  return url;
 }
 
 const HotelCard: React.FC<HotelCardProps> = ({

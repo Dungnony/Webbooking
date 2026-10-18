@@ -5,8 +5,8 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import SearchWidget from '../components/SearchWidget';
 import HotelCard from '../components/HotelCard';
-import { hotelApi } from '../api';
-import { useWishlist } from '../context/WishlistContext';
+import { hotelApi, HotelWithStats } from '../api';
+import { useWishlist } from '../context/useWishlist';
 import { TrophyTwoTone, SafetyCertificateTwoTone, CustomerServiceTwoTone, StarTwoTone } from '@ant-design/icons';
 import AIAssistantWidget from '../components/AIAssistantWidget';
 import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
@@ -14,14 +14,14 @@ import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
-  const [hotels, setHotels] = useState<any[]>([]);
+  const [hotels, setHotels] = useState<HotelWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const { isInWishlist, toggleWish } = useWishlist();
 
   useEffect(() => {
     cachedFetch('hotels_all', () => hotelApi.getAll(), HOTEL_LIST_TTL)
       .then(data => setHotels(data || []))
-      .catch(() => {})
+      .catch(err => console.error('Failed to load hotels', err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -106,16 +106,20 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <Row gutter={[16, 20]}>
-              {hotels.slice(0, 8).map((hotel) => (
-                <Col key={hotel.id} xs={24} sm={12} md={6}>
-                  <HotelCard
-                    hotel={hotel}
-                    wished={isInWishlist(hotel.id)}
-                    onWishToggle={() => toggleWish(hotel.id)}
-                    onClick={() => navigate(`/hotels/${hotel.id}`)}
-                  />
-                </Col>
-              ))}
+              {hotels.slice(0, 8).map((hotel) => {
+                const hotelId = hotel.id;
+                if (hotelId === undefined) return null;
+                return (
+                  <Col key={hotelId} xs={24} sm={12} md={6}>
+                    <HotelCard
+                      hotel={hotel}
+                      wished={isInWishlist(hotelId)}
+                      onWishToggle={() => toggleWish(hotelId)}
+                      onClick={() => navigate(`/hotels/${hotelId}`)}
+                    />
+                  </Col>
+                );
+              })}
             </Row>
           )}
         </div>

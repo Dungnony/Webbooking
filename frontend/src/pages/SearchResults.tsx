@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Row, Col, Slider, Checkbox, Select, Empty } from 'antd';
-import { FilterOutlined, SortAscendingOutlined } from '@ant-design/icons';
+import { Slider, Checkbox, Select, Empty } from 'antd';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import SearchWidget from '../components/SearchWidget';
-import HotelCard, { getHotelImage } from '../components/HotelCard';
-import { hotelApi } from '../api';
-import { useWishlist } from '../context/WishlistContext';
+import { getHotelImage } from '../utils/imageUtils';
+import { hotelApi, HotelWithStats } from '../api';
 import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
 const { Option } = Select;
@@ -24,21 +22,20 @@ const SearchResults: React.FC = () => {
   const numGuests = Number(guests) || 2;
   const numRooms = Number(roomsStr) || 1;
 
-  const [hotels, setHotels] = useState<any[]>([]);
+  const [hotels, setHotels] = useState<HotelWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('rating');
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 10000000]);
   const [selectedRatings, setSelectedRatings] = useState<number[]>([]);
   const [selectedPropertyTypes, setSelectedPropertyTypes] = useState<string[]>([]);
   const [selectedFeatures, setSelectedFeatures] = useState<string[]>([]);
-  const { isInWishlist, toggleWish } = useWishlist();
 
   useEffect(() => {
     setLoading(true);
     // Tái dùng cache hotels_all từ HomePage nếu có
     cachedFetch('hotels_all', () => hotelApi.getAll(), HOTEL_LIST_TTL)
       .then(data => setHotels(data || []))
-      .catch(() => {})
+      .catch(err => console.error('Failed to load hotels', err))
       .finally(() => setLoading(false));
   }, []);
 
@@ -87,15 +84,15 @@ const SearchResults: React.FC = () => {
     // Lọc theo sức chứa khách và phòng
     result = result.filter(h => {
       if (!h.rooms || h.rooms.length === 0) return false;
-      const totalCapacity = h.rooms.reduce((sum: number, r: any) => sum + (r.capacity || 0) * (r.quantity || 0), 0);
-      const totalRooms = h.rooms.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+      const totalCapacity = h.rooms.reduce((sum, r) => sum + (r.capacity || 0) * (r.quantity || 0), 0);
+      const totalRooms = h.rooms.reduce((sum, r) => sum + (r.quantity || 0), 0);
       return totalCapacity >= numGuests && totalRooms >= numRooms;
     });
 
     // Sắp xếp
     result.sort((a, b) => {
       if (sortBy === 'rating') return (b.ratingAvg || 0) - (a.ratingAvg || 0);
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'name') return (a.name ?? '').localeCompare(b.name ?? '');
       return 0;
     });
 

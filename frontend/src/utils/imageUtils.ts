@@ -8,3 +8,19 @@ export function transformImageUrl(url: string | null | undefined): string | unde
   }
   return url;
 }
+
+interface HotelImageSource {
+  imageUrl?: string;
+  rooms?: { images?: { imageUrl?: string }[] }[];
+}
+
+/**
+ * Lấy URL ảnh đại diện cho hotel.
+ * Ưu tiên: hotel.imageUrl → ảnh đầu tiên của phòng đầu tiên có ảnh → null
+ */
+export function getHotelImage(hotel: HotelImageSource | null | undefined): string | null {
+  const roomImage = hotel?.rooms
+    ?.map(room => room.images?.[0]?.imageUrl)
+    .find((url): url is string => !!url);
+  return transformImageUrl(hotel?.imageUrl || roomImage) ?? null;
+}

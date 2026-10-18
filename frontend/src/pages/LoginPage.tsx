@@ -2,40 +2,27 @@ import React, { useState } from 'react';
 import { Form, Input, Button, message, Divider } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
 import { UserOutlined, LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
-import { GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { authApi } from '../api';
+import { saveSession } from '../utils/auth';
+import { getErrorMessage, getErrorStatus } from '../utils/errors';
 
 const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
+  const redirectByRole = (role: string) => navigate(role === 'ADMIN' ? '/admin' : '/');
+
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) return;
     setLoading(true);
     try {
-      const res = await authApi.googleLogin(credentialResponse.credential);
-      const token: string = res;
-
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      const payload = JSON.parse(jsonPayload);
-
-      const role = payload.role || 'USER';
-      localStorage.setItem('token', token);
-      localStorage.setItem('username', payload.sub || 'GoogleUser'); // Dùng sub làm username tạm hoặc backend trả về info tốt hơn
-      localStorage.setItem('role', role);
-
+      const token = await authApi.googleLogin(credentialResponse.credential);
+      const role = saveSession(token, 'GoogleUser');
       message.success('Đăng nhập bằng Google thành công! 👋');
-      if (role === 'ADMIN') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
-    } catch (error: any) {
-      message.error('Lỗi đăng nhập Google: ' + (error?.message || 'Không xác định'));
+      redirectByRole(role);
+    } catch (error) {
+      message.error('Lỗi đăng nhập Google: ' + getErrorMessage(error, 'Không xác định'));
     } finally {
       setLoading(false);
     }
@@ -45,34 +32,17 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     try {
       const res = await authApi.login(values.username, values.password);
-      const token: string = res.data as unknown as string;
-
-      // Phân tích quyền (role) từ JWT token
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      const payload = JSON.parse(jsonPayload);
-
-      const role = payload.role || 'USER';
-      localStorage.setItem('token', token);
-      localStorage.setItem('username', values.username);
-      localStorage.setItem('role', role);
-
+      const role = saveSession(res.data, values.username);
       message.success('Đăng nhập thành công! 👋');
-      if (role === 'ADMIN') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
-    } catch (error: any) {
-      if (error?.status === 401 || error?.status === 400) {
+      redirectByRole(role);
+    } catch (error) {
+      const status = getErrorStatus(error);
+      if (status === 401 || status === 400) {
         message.error('Tên đăng nhập hoặc mật khẩu không đúng!');
-      } else if (!error?.status) {
+      } else if (status === undefined) {
         message.error('Không thể kết nối server. Kiểm tra backend đang chạy!');
       } else {
-        message.error('Có lỗi xảy ra: ' + (error?.error || error?.statusText || ''));
+        message.error('Có lỗi xảy ra: ' + getErrorMessage(error, String(status)));
       }
     } finally {
       setLoading(false);

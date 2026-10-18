@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Steps, message, Result } from 'antd';
+import { Form, Input, Button, Steps, message } from 'antd';
 import { UserOutlined, LockOutlined, SafetyOutlined } from '@ant-design/icons';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api';
+import { getErrorMessage } from '../utils/errors';
 
 const ForgotPassword: React.FC = () => {
   const navigate = useNavigate();
@@ -19,8 +20,8 @@ const ForgotPassword: React.FC = () => {
       setMaskedEmail(emailRes);
       setStep(1);
       message.success(`Mã xác nhận đã được gửi đến email liên kết`);
-    } catch (error: any) {
-      message.error(error.message || 'Tên đăng nhập không tồn tại hoặc lỗi hệ thống.');
+    } catch (error) {
+      message.error(getErrorMessage(error, 'Tên đăng nhập không tồn tại hoặc lỗi hệ thống.'));
     } finally {
       setLoading(false);
     }
@@ -36,8 +37,8 @@ const ForgotPassword: React.FC = () => {
       await authApi.resetPassword(username, values.otp, values.password);
       setStep(2);
       message.success('Đặt lại mật khẩu thành công!');
-    } catch (error: any) {
-      message.error(error.message || 'Mã OTP không hợp lệ hoặc lỗi hệ thống.');
+    } catch (error) {
+      message.error(getErrorMessage(error, 'Mã OTP không hợp lệ hoặc lỗi hệ thống.'));
     } finally {
       setLoading(false);
     }

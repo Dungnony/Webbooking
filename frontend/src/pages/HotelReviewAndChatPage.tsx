@@ -4,7 +4,10 @@ import { Row, Col, Input, Button, message, Divider } from 'antd';
 import { SendOutlined, StarFilled, LeftOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { hotelApi, reviewApi, chatApi } from '../api';
+import { LOGIN_REQUIRED_REPLY } from '../components/AIAssistantWidget';
+import { hotelApi, reviewApi, chatApi, ChatMessage, HotelWithStats } from '../api';
+import type { Review } from '../api-generated';
+import { getErrorMessage } from '../utils/errors';
 
 
 /* ── Helper Functions ── */
@@ -34,6 +37,17 @@ const formatTimeAgo = (dateStr: string) => {
   return d.toLocaleDateString('vi-VN');
 };
 
+interface StarRatingProps {
+  value: number;
+  hover?: number;
+  onChange?: (v: number) => void;
+  onHover?: (v: number) => void;
+  onLeave?: () => void;
+  size?: number;
+  count?: number;
+  readonly?: boolean;
+}
+
 const StarRating = ({
   value,
   hover,
@@ -43,7 +57,7 @@ const StarRating = ({
   size = 28,
   count = 10,
   readonly = false,
-}: any) => {
+}: StarRatingProps) => {
   const active = hover || value;
   return (
     <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -73,10 +87,10 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   const { id: paramsId } = useParams<{ id: string }>();
   const id = paramsId || window.location.pathname.split('/')[2];
   const navigate = useNavigate();
-  const [hotel, setHotel] = useState<any>(null);
-  
+  const [hotel, setHotel] = useState<HotelWithStats | null>(null);
+
   // State đánh giá
-  const [allReviews, setAllReviews] = useState<any[]>([]);
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewHover, setReviewHover] = useState(0);
   const [reviewComment, setReviewComment] = useState('');
@@ -88,7 +102,7 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [chatHistory, setChatHistory] = useState<{role: 'user'|'assistant', content: string}[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   const isLoggedIn = !!localStorage.getItem('token');
   const currentUsername = useMemo(() => {
@@ -100,21 +114,29 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
     } catch { return null; }
   }, []);
 
-  const reviews = useMemo(() => allReviews.filter((r: any) => r.hotel?.id === Number(id)), [allReviews, id]);
+  const reviews = useMemo(() => allReviews.filter(r => r.hotel?.id === Number(id)), [allReviews, id]);
+  const sortedReviews = useMemo(
+    () => [...reviews].sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()),
+    [reviews],
+  );
   const reviewStats = useMemo(() => {
     if (reviews.length === 0) return { avg: null, total: 0 };
-    const sum = reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
+    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
     return { avg: sum / reviews.length, total: reviews.length };
   }, [reviews]);
-  const hasReviewed = reviews.some((r: any) => r.user?.username === currentUsername);
+  const hasReviewed = reviews.some(r => r.user?.username === currentUsername);
 
   const fetchReviews = useCallback(() => {
-    reviewApi.getAll().then((res: any) => setAllReviews(res.data || [])).catch(() => {});
+    reviewApi.getAll()
+      .then(res => setAllReviews(res.data || []))
+      .catch(err => console.error('Failed to load reviews', err));
   }, []);
 
   useEffect(() => {
     if (!id) return;
-    hotelApi.getById(Number(id)).then(res => setHotel(res.data)).catch(() => {});
+    hotelApi.getById(Number(id))
+      .then(res => setHotel(res.data))
+      .catch(err => console.error('Failed to load hotel', err));
     fetchReviews();
   }, [id, fetchReviews]);
 
@@ -124,29 +146,18 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
 
     setSubmittingReview(true);
     try {
-      const token = localStorage.getItem('token');
-      let userId: number | null = null;
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          userId = payload.userId || payload.id || null;
-        } catch {}
-      }
-
-      const reviewData: any = {
+      // The backend attaches the review to the logged-in user, so no author is sent.
+      await reviewApi.create({
         rating: reviewRating,
         comment: reviewComment,
         hotel: { id: Number(id) },
-      };
-      if (userId) reviewData.user = { id: userId };
-
-      await reviewApi.create(reviewData);
+      });
       message.success('🎉 Đánh giá của bạn đã được gửi thành công!');
       setReviewRating(0);
       setReviewComment('');
       fetchReviews();
     } catch (e) {
-      message.error('Gửi đánh giá thất bại!');
+      message.error(getErrorMessage(e, 'Gửi đánh giá thất bại!'));
     } finally {
       setSubmittingReview(false);
     }
@@ -158,7 +169,11 @@ const handleSendMessage = async () => {
   const userText = chatInput.trim();
   setChatInput('');
   setMessages(prev => [...prev, { sender: 'user', text: userText, time: new Date() }]);
-  const newHistory = [...chatHistory, { role: 'user' as const, content: userText }];
+  if (!isLoggedIn) {
+    setMessages(prev => [...prev, { sender: 'bot', text: LOGIN_REQUIRED_REPLY, time: new Date() }]);
+    return;
+  }
+  const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userText }];
   setChatHistory(newHistory);
   setChatLoading(true);
 
@@ -248,9 +263,9 @@ const handleSendMessage = async () => {
 
               {/* Reviews List */}
               <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Tất cả đánh giá ({reviews.length})</h3>
-              {reviews.length > 0 ? (
-                reviews.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((review: any, idx: number) => (
-                  <div key={idx} style={{ padding: '20px 0', borderBottom: idx < reviews.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', gap: 16 }}>
+              {sortedReviews.length > 0 ? (
+                sortedReviews.map((review, idx) => (
+                  <div key={review.id ?? idx} style={{ padding: '20px 0', borderBottom: idx < sortedReviews.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', gap: 16 }}>
                     <div style={{
                       width: 48, height: 48, borderRadius: '50%', background: `hsl(${((review.user?.username || 'U').charCodeAt(0) * 47) % 360}, 55%, 45%)`,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 20, flexShrink: 0
@@ -264,11 +279,11 @@ const handleSendMessage = async () => {
                           <div style={{ fontSize: 12, color: '#8c8c8c' }}>{review.createdAt ? formatTimeAgo(review.createdAt) : ''}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <div style={{ background: getRatingColor(review.rating), color: '#fff', borderRadius: '4px 4px 4px 0', padding: '4px 10px', fontWeight: 800, fontSize: 15 }}>
+                          <div style={{ background: getRatingColor(review.rating ?? 0), color: '#fff', borderRadius: '4px 4px 4px 0', padding: '4px 10px', fontWeight: 800, fontSize: 15 }}>
                             {review.rating}
                           </div>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: getRatingColor(review.rating) }}>
-                            {getRatingLabel(review.rating)}
+                          <span style={{ fontSize: 13, fontWeight: 600, color: getRatingColor(review.rating ?? 0) }}>
+                            {getRatingLabel(review.rating ?? 0)}
                           </span>
                         </div>
                       </div>

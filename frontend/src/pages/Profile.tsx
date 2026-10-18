@@ -3,70 +3,92 @@ import { Form, Input, Button, message, Divider, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { UserOutlined, SaveOutlined, MailOutlined, LockOutlined, HeartOutlined, CalendarOutlined, HomeOutlined } from '@ant-design/icons';
 import { userApi } from '../api';
+import type { User } from '../api-generated';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { getErrorMessage } from '../utils/errors';
 
+interface EmailFormValues {
+  username: string;
+  email: string;
+  otp?: string;
+}
+
+interface PasswordFormValues {
+  newPassword: string;
+}
+
+// Route is wrapped in <AuthGuard>, so a token is always present here.
 const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [form] = Form.useForm();
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  // The address the OTP was sent to; confirming always uses it, even if the input was edited afterwards.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [emailForm] = Form.useForm<EmailFormValues>();
+  const [passwordForm] = Form.useForm<PasswordFormValues>();
   const localUsername = localStorage.getItem('username') || 'User';
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('role');
-    
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    
-    // Đã gỡ bỏ đoạn chặn Admin ở đây để Admin vào sửa hồ sơ được
-
-    userApi.getAll()
-      .then(res => {
-        const users = res.data || [];
-        const found = users.find((u: any) => u.username === localUsername);
-        if (found) {
-          setCurrentUser(found);
-          form.setFieldsValue({
-            username: found.username,
-            email: found.email,
-          });
-        } else {
-          form.setFieldsValue({ username: localUsername });
-        }
+    userApi.getMe()
+      .then(user => {
+        setCurrentUser(user);
+        emailForm.setFieldsValue({ username: user.username, email: user.email });
       })
-      .catch(() => {
-        message.warning('Đang hiển thị offline.');
-        form.setFieldsValue({ username: localUsername });
+      .catch(err => {
+        message.error(getErrorMessage(err, 'Không thể tải hồ sơ.'));
+        emailForm.setFieldsValue({ username: localUsername });
       });
-  }, [navigate, form, localUsername]);
+  }, [emailForm, localUsername]);
 
-  const onFinish = async (values: any) => {
-    setLoading(true);
+  const handleSendEmailOtp = async () => {
+    const { email } = await emailForm.validateFields(['email']);
+    setEmailLoading(true);
     try {
-      if (currentUser && currentUser.id) {
-        const updatedData = {
-          ...currentUser,
-          username: values.username,
-          email: values.email,
-        };
-        if (values.newPassword) {
-          updatedData.password = values.newPassword;
-        }
-        await userApi.update(currentUser.id, updatedData);
-        localStorage.setItem('username', values.username);
-        message.success('Cập nhật thông tin thành công! 🎉');
-      } else {
-        localStorage.setItem('username', values.username);
-        message.success('Cập nhật thành công (Offline)!');
-      }
-    } catch (err: any) {
-      message.error(err?.response?.data || 'Cập nhật thất bại.');
+      const maskedEmail = await userApi.requestEmailChange(email.trim());
+      setPendingEmail(email.trim());
+      message.success(`Đã gửi mã OTP tới ${maskedEmail}. Vui lòng kiểm tra hộp thư.`);
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Không thể gửi mã xác nhận.'));
     } finally {
-      setLoading(false);
+      setEmailLoading(false);
+    }
+  };
+
+  const handleConfirmEmail = async () => {
+    if (!pendingEmail) return;
+    const { otp } = await emailForm.validateFields(['otp']);
+    setEmailLoading(true);
+    try {
+      const updated = await userApi.confirmEmailChange(pendingEmail, (otp ?? '').trim());
+      setCurrentUser(updated);
+      setPendingEmail(null);
+      emailForm.setFieldsValue({ email: updated.email, otp: undefined });
+      message.success('Đổi email thành công! 🎉');
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Xác nhận đổi email thất bại.'));
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleCancelEmailChange = () => {
+    setPendingEmail(null);
+    emailForm.setFieldsValue({ email: currentUser?.email, otp: undefined });
+  };
+
+  const onChangePassword = async (values: PasswordFormValues) => {
+    setPasswordLoading(true);
+    try {
+      const updated = await userApi.updateMe({ newPassword: values.newPassword });
+      setCurrentUser(updated);
+      passwordForm.resetFields();
+      message.success('Đổi mật khẩu thành công! 🎉');
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Đổi mật khẩu thất bại.'));
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -122,33 +144,68 @@ const Profile: React.FC = () => {
             <div className="profile-content-card">
               <div className="profile-content-title">Quản lý tài khoản</div>
               
-              <Form form={form} layout="vertical" onFinish={onFinish} size="large" style={{ maxWidth: 500 }}>
+              <Form form={emailForm} layout="vertical" size="large" style={{ maxWidth: 500 }}>
                 <Form.Item
                   name="username"
                   label="Tên đăng nhập"
-                  rules={[{ required: true, message: 'Tên đăng nhập không được trống!' }]}
+                  extra="Tên đăng nhập không thể thay đổi."
                 >
-                  <Input prefix={<UserOutlined style={{ color: '#888' }} />} />
+                  <Input prefix={<UserOutlined style={{ color: '#888' }} />} disabled />
                 </Form.Item>
 
                 <Form.Item
                   name="email"
                   label="Email"
+                  extra="Email mới chỉ được lưu sau khi bạn nhập mã OTP gửi tới địa chỉ đó."
                   rules={[
                     { required: true, message: 'Email không được trống!' },
                     { type: 'email', message: 'Email không đúng định dạng!' }
                   ]}
                 >
-                  <Input prefix={<MailOutlined style={{ color: '#888' }} />} />
+                  <Input prefix={<MailOutlined style={{ color: '#888' }} />} disabled={pendingEmail !== null} />
                 </Form.Item>
 
-                <Form.Item name="newPassword" label="Mật khẩu mới">
-                  <Input.Password prefix={<LockOutlined style={{ color: '#888' }} />} placeholder="Để trống nếu không đổi mật khẩu" />
+                {pendingEmail === null ? (
+                  <Form.Item>
+                    <Button onClick={handleSendEmailOtp} loading={emailLoading} icon={<MailOutlined />}>
+                      Gửi mã xác nhận
+                    </Button>
+                  </Form.Item>
+                ) : (
+                  <>
+                    <Form.Item
+                      name="otp"
+                      label={`Mã OTP đã gửi tới ${pendingEmail}`}
+                      rules={[{ required: true, message: 'Vui lòng nhập mã OTP!' }]}
+                    >
+                      <Input maxLength={6} placeholder="Nhập mã 6 số" />
+                    </Form.Item>
+                    <Form.Item>
+                      <div style={{ display: 'flex', gap: 12 }}>
+                        <Button type="primary" onClick={handleConfirmEmail} loading={emailLoading} icon={<SaveOutlined />}>
+                          Xác nhận đổi email
+                        </Button>
+                        <Button onClick={handleCancelEmailChange} disabled={emailLoading}>Hủy</Button>
+                      </div>
+                    </Form.Item>
+                  </>
+                )}
+              </Form>
+
+              <Divider />
+
+              <Form form={passwordForm} layout="vertical" onFinish={onChangePassword} size="large" style={{ maxWidth: 500 }}>
+                <Form.Item
+                  name="newPassword"
+                  label="Mật khẩu mới"
+                  rules={[{ required: true, message: 'Vui lòng nhập mật khẩu mới!' }]}
+                >
+                  <Input.Password prefix={<LockOutlined style={{ color: '#888' }} />} placeholder="Nhập mật khẩu mới" />
                 </Form.Item>
 
                 <Form.Item>
-                  <Button type="primary" htmlType="submit" loading={loading} icon={<SaveOutlined />}>
-                    Lưu thay đổi
+                  <Button type="primary" htmlType="submit" loading={passwordLoading} icon={<SaveOutlined />}>
+                    Đổi mật khẩu
                   </Button>
                 </Form.Item>
               </Form>

@@ -1,7 +1,8 @@
+import type { AxiosResponse } from 'axios';
 import {
   Api,
   Booking,
-  BookingRequest,
+  ContentType,
   CreateBookingRequestDto,
   Hotel,
   ProcessBookingRequestDto,
@@ -9,9 +10,10 @@ import {
   Room,
   User,
 } from './api-generated';
+import { getErrorMessage } from './utils/errors';
 
 // ─── Khởi tạo Swagger client ──────────────────────────────────
-// baseUrl = '' để dựa vào Vite proxy (forward tới localhost:8080)
+// baseUrl = '/proxy' để dựa vào Vite proxy (dev) hoặc Vercel rewrite (prod)
 const swaggerApi = new Api({
   baseURL: '/proxy',
   // Tự động gắn JWT token cho mọi request
@@ -26,9 +28,62 @@ const swaggerApi = new Api({
 
 export default swaggerApi;
 
+// ─── Kiểu dữ liệu chưa có trong api-generated.ts ─────────────
+/** Hotel as returned by the backend, which also computes `reviewCount`. */
+export type HotelWithStats = Hotel & { reviewCount?: number };
+
+export interface PaymentQr {
+  bookingId: number;
+  qrCodeUrl: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  amount: number;
+  transferContent: string;
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatHotelInfo {
+  name?: string;
+  description?: string;
+  address?: string;
+  city?: string;
+  ratingAvg?: number;
+}
+
+export interface ChatReply {
+  reply?: string;
+}
+
+// The generated `BookingRequest` is the entity, not the create-booking DTO, because of a Swagger name clash.
+export interface CreateBookingPayload {
+  checkInDate: string;
+  checkOutDate: string;
+  rooms: { roomId: number; quantity: number }[];
+}
+
+export interface UpdateProfilePayload {
+  newPassword: string;
+}
+
+export type AdminOverview = Record<string, number>;
+
 // ─── Param mặc định: luôn parse response thành JSON ──────────
 const JSON_FMT = { format: 'json' as const };
 const TEXT_FMT = { format: 'text' as const };
+
+/** Returns the response body; rejects with an Error carrying the backend's message. */
+const unwrap = <T>(request: Promise<AxiosResponse<T>>, fallbackMessage: string): Promise<T> =>
+  request.then(
+    res => res.data,
+    (error: unknown) => {
+      throw new Error(getErrorMessage(error, fallbackMessage));
+    },
+  );
 
 // ─── AUTH ─────────────────────────────────────────────────────
 export const authApi = {
@@ -42,47 +97,38 @@ export const authApi = {
     swaggerApi.auth.verifyOtp({ email, otp }, TEXT_FMT),
 
   googleLogin: (credential: string) =>
-    fetch('/proxy/auth/google', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential }),
-    }).then(async res => {
-      if (!res.ok) throw new Error(await res.text());
-      return res.text();
-    }),
+    unwrap(
+      swaggerApi.request<string>({
+        path: '/auth/google', method: 'POST', body: { credential }, type: ContentType.Json, ...TEXT_FMT,
+      }),
+      'Đăng nhập Google thất bại',
+    ),
 
   forgotPassword: (username: string) =>
-    fetch('/proxy/auth/forgot-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username }),
-    }).then(async res => {
-      if (!res.ok) throw new Error(await res.text());
-      return res.text();
-    }),
+    unwrap(
+      swaggerApi.request<string>({
+        path: '/auth/forgot-password', method: 'POST', body: { username }, type: ContentType.Json, ...TEXT_FMT,
+      }),
+      'Không thể gửi mã xác nhận',
+    ),
 
   resetPassword: (username: string, otp: string, newPassword: string) =>
-    fetch('/proxy/auth/reset-password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, otp, newPassword }),
-    }).then(async res => {
-      if (!res.ok) throw new Error(await res.text());
-      return res.text();
-    }),
+    unwrap(
+      swaggerApi.request<string>({
+        path: '/auth/reset-password', method: 'POST', body: { username, otp, newPassword }, type: ContentType.Json, ...TEXT_FMT,
+      }),
+      'Đặt lại mật khẩu thất bại',
+    ),
 };
 
 export const chatApi = {
-  sendMessage: (messages: any[], hotelInfo: any) => {
-    return fetch('/proxy/api/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({ messages, hotelInfo })
-    }).then(res => res.json());
-  }
+  sendMessage: (messages: ChatMessage[], hotelInfo: ChatHotelInfo) =>
+    unwrap(
+      swaggerApi.request<ChatReply>({
+        path: '/api/chat', method: 'POST', body: { messages, hotelInfo }, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Lỗi kết nối tới trợ lý AI',
+    ),
 };
 
 // ─── USERS ────────────────────────────────────────────────────
@@ -92,12 +138,42 @@ export const userApi = {
   create: (data: User) => swaggerApi.users.create(data, JSON_FMT),
   update: (id: number, data: User) => swaggerApi.users.update(id, data, JSON_FMT),
   delete: (id: number) => swaggerApi.users.delete(id, JSON_FMT),
+
+  getMe: () =>
+    unwrap(
+      swaggerApi.request<User>({ path: '/users/me', method: 'GET', secure: true, ...JSON_FMT }),
+      'Không thể tải hồ sơ',
+    ),
+  updateMe: (data: UpdateProfilePayload) =>
+    unwrap(
+      swaggerApi.request<User>({
+        path: '/users/me', method: 'PUT', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Cập nhật thất bại',
+    ),
+  /** Sends an OTP to the new address; resolves with the masked address. */
+  requestEmailChange: (email: string) =>
+    unwrap(
+      swaggerApi.request<string>({
+        path: '/users/me/email/otp', method: 'POST', body: { email }, secure: true, type: ContentType.Json, ...TEXT_FMT,
+      }),
+      'Không thể gửi mã xác nhận',
+    ),
+  confirmEmailChange: (email: string, otp: string) =>
+    unwrap(
+      swaggerApi.request<User>({
+        path: '/users/me/email', method: 'PUT', body: { email, otp }, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Xác nhận đổi email thất bại',
+    ),
 };
 
 // ─── HOTELS ───────────────────────────────────────────────────
 export const hotelApi = {
-  getAll: () => swaggerApi.hotels.getAll1(JSON_FMT),
-  getById: (id: number) => swaggerApi.hotels.getById(id, JSON_FMT),
+  getAll: () =>
+    swaggerApi.request<HotelWithStats[]>({ path: '/hotels', method: 'GET', secure: true, ...JSON_FMT }),
+  getById: (id: number) =>
+    swaggerApi.request<HotelWithStats>({ path: `/hotels/${id}`, method: 'GET', secure: true, ...JSON_FMT }),
   create: (data: Hotel) => swaggerApi.hotels.create2(data, JSON_FMT),
   update: (id: number, data: Hotel) => swaggerApi.hotels.update1(id, data, JSON_FMT),
   delete: (id: number) => swaggerApi.hotels.delete1(id, JSON_FMT),
@@ -112,10 +188,11 @@ export const roomApi = {
 
 // ─── BOOKINGS ─────────────────────────────────────────────────
 export const bookingApi = {
-  create: (hotelId: number, data: BookingRequest) =>
-    swaggerApi.bookings.createBooking(hotelId, data, JSON_FMT),
+  create: (hotelId: number, data: CreateBookingPayload) =>
+    swaggerApi.request<Booking>({
+      path: `/bookings/${hotelId}`, method: 'POST', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
+    }),
   getMy: () => swaggerApi.bookings.myBookings(JSON_FMT),
-  getMyBookings: () => swaggerApi.bookings.myBookings(JSON_FMT),
   cancel: (bookingId: number) => swaggerApi.bookings.cancelBooking(bookingId, JSON_FMT),
   createRequest: (bookingId: number, data: CreateBookingRequestDto) =>
     swaggerApi.bookings.createRequest(bookingId, data, JSON_FMT),
@@ -125,34 +202,20 @@ export const bookingApi = {
 
 // ─── PAYMENTS ─────────────────────────────────────────────────
 export const paymentApi = {
-  getPaymentQr: (bookingId: number) => {
-    return fetch(`/proxy/bookings/${bookingId}/payment-qr`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    }).then(async res => {
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Lỗi lấy QR');
-      }
-      return res.json();
-    });
-  },
-  confirmPayment: (bookingId: number) => {
-    return fetch(`/proxy/bookings/${bookingId}/confirm-payment`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    }).then(async res => {
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Lỗi xác nhận');
-      }
-      return res.json();
-    });
-  }
+  getPaymentQr: (bookingId: number) =>
+    unwrap(
+      swaggerApi.request<PaymentQr>({
+        path: `/bookings/${bookingId}/payment-qr`, method: 'GET', secure: true, ...JSON_FMT,
+      }),
+      'Lỗi lấy QR',
+    ),
+  confirmPayment: (bookingId: number) =>
+    unwrap(
+      swaggerApi.request<Booking>({
+        path: `/bookings/${bookingId}/confirm-payment`, method: 'POST', secure: true, ...JSON_FMT,
+      }),
+      'Lỗi xác nhận',
+    ),
 };
 
 // ─── NOTIFICATIONS ────────────────────────────────────────────
@@ -161,16 +224,19 @@ export const notificationApi = {
   markAsRead: (notificationId: number) =>
     swaggerApi.notifications.markAsRead(notificationId, JSON_FMT),
   delete: (notificationId: number) =>
-    fetch(`/proxy/notifications/${notificationId}`, {
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    }),
+    unwrap(
+      swaggerApi.request<void>({ path: `/notifications/${notificationId}`, method: 'DELETE', secure: true }),
+      'Không thể xóa thông báo',
+    ),
 };
 
 // ─── ADMIN ────────────────────────────────────────────────────
+export type BookingStatus = NonNullable<Booking['status']>;
+export type BookingRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export const adminApi = {
   // Đặt phòng
-  getBookings: (status?: 'PENDING' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED') =>
+  getBookings: (status?: BookingStatus) =>
     swaggerApi.admin.getBookings(status ? { status } : {}, JSON_FMT),
   approveBooking: (bookingId: number) =>
     swaggerApi.admin.approveBooking(bookingId, JSON_FMT),
@@ -180,7 +246,7 @@ export const adminApi = {
     swaggerApi.admin.markBookingPaid(bookingId, JSON_FMT),
 
   // Yêu cầu đặt phòng
-  getBookingRequests: (status?: 'PENDING' | 'APPROVED' | 'REJECTED') =>
+  getBookingRequests: (status?: BookingRequestStatus) =>
     swaggerApi.admin.getBookingRequests(status ? { status } : {}, JSON_FMT),
   approveBookingRequest: (requestId: number, response?: string) =>
     swaggerApi.admin.approveBookingRequest(requestId, { response } as ProcessBookingRequestDto, JSON_FMT),
@@ -188,8 +254,13 @@ export const adminApi = {
     swaggerApi.admin.rejectBookingRequest(requestId, { response } as ProcessBookingRequestDto, JSON_FMT),
 
   // Thống kê & Báo cáo
-  getOverview: () => swaggerApi.admin.getOverview(JSON_FMT),
-  exportBookingsExcel: () => swaggerApi.admin.exportBookings(JSON_FMT),
+  getOverview: () =>
+    swaggerApi.request<AdminOverview>({ path: '/admin/statistics/overview', method: 'GET', secure: true, ...JSON_FMT }),
+  exportBookingsExcel: () =>
+    unwrap(
+      swaggerApi.request<Blob>({ path: '/admin/reports/bookings.xlsx', method: 'GET', secure: true, format: 'blob' }),
+      'Có lỗi xảy ra khi xuất báo cáo',
+    ),
 };
 
 // ─── REVIEWS ──────────────────────────────────────────────────

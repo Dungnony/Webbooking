@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Table, Tag, Button, Empty, message, Modal, Form, Input, Select, Card } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { userApi } from '../../api';
+import type { User } from '../../api-generated';
 
 const AdminUsers: React.FC = () => {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [form] = Form.useForm();
+  const [form] = Form.useForm<User>();
 
   const loadUsers = () => {
     setLoading(true);
@@ -46,7 +47,7 @@ const AdminUsers: React.FC = () => {
     });
   };
 
-  const openEditModal = (user: any) => {
+  const openEditModal = (user: User) => {
     setEditingUser(user);
     form.setFieldsValue(user);
     setIsModalOpen(true);
@@ -58,9 +59,9 @@ const AdminUsers: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleModalSubmit = async (values: any) => {
+  const handleModalSubmit = async (values: User) => {
     try {
-      if (editingUser) {
+      if (editingUser?.id !== undefined) {
         const updated = { ...editingUser, ...values };
         await userApi.update(editingUser.id, updated);
         message.success('Cập nhật người dùng thành công!');
@@ -93,14 +94,16 @@ const AdminUsers: React.FC = () => {
       title: 'Hành động',
       key: 'action',
       width: 180,
-      render: (_: any, record: any) => (
-        record.username === 'admin' ? null : (
+      render: (_: unknown, record: User) => {
+        const userId = record.id;
+        if (record.username === 'admin' || userId === undefined) return null;
+        return (
           <div style={{ display: 'flex', gap: 8 }}>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>Sửa</Button>
-            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>Xóa</Button>
+            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(userId)}>Xóa</Button>
           </div>
-        )
-      )
+        );
+      }
     },
   ];
 

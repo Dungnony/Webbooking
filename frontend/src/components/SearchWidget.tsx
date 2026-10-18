@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, DatePicker, Popover, Input } from 'antd';
+import { Button, DatePicker, Popover } from 'antd';
 import { EnvironmentOutlined, CalendarOutlined, TeamOutlined, SearchOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import moment, { Moment } from 'moment';
 
 const { RangePicker } = DatePicker;
 
 interface SearchWidgetProps {
-  compact?: boolean;
   initialCity?: string;
   initialCheckIn?: string;
   initialCheckOut?: string;
@@ -15,7 +14,6 @@ interface SearchWidgetProps {
 }
 
 const SearchWidget: React.FC<SearchWidgetProps> = ({
-  compact = false,
   initialCity = '',
   initialCheckIn,
   initialCheckOut,

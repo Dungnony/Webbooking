@@ -1,13 +1,14 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Button, Result, Divider } from 'antd';
+import { Button, Divider } from 'antd';
 import { CheckCircleFilled, PrinterOutlined, HomeOutlined, UnorderedListOutlined, FrownOutlined, ProfileOutlined, BankOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import type { BookingFlowState } from '../types/bookingFlow';
 
 const BookingConfirmation: React.FC = () => {
   const navigate = useNavigate();
-  const { state } = useLocation() as { state: any };
+  const state = useLocation().state as BookingFlowState | null;
 
   if (!state) {
     return (
@@ -85,7 +86,7 @@ const BookingConfirmation: React.FC = () => {
             ['Email', guestInfo?.email],
             ['Điện thoại', guestInfo?.phone],
             ['Khách sạn', hotel?.name || '—'],
-            ['Loại phòng', room?.roomType || 'Phòng tiêu chuẩn'],
+            ['Loại phòng', room?.type || room?.name || 'Phòng tiêu chuẩn'],
             ['Ngày nhận phòng', `${checkIn} (từ 14:00)`],
             ['Ngày trả phòng', `${checkOut} (trước 12:00)`],
             ['Số đêm', `${Math.max(1, nights || 2)} đêm`],

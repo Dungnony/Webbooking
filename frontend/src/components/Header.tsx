@@ -1,18 +1,20 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Popover, Badge, List, Typography, Spin, Tooltip, Modal } from 'antd';
 import { BellOutlined, DeleteOutlined, SyncOutlined, CheckOutlined, DownOutlined, HeartOutlined, CarryOutOutlined } from '@ant-design/icons';
-import { useWishlist } from '../context/WishlistContext';
+import { useWishlist } from '../context/useWishlist';
 import { notificationApi } from '../api';
+import type { Notification } from '../api-generated';
 
 const { Text } = Typography;
 
+const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
+
 interface HeaderProps {
-  showSearch?: boolean;
   fullWidth?: boolean;
 }
 
-const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
+const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const username = localStorage.getItem('username');
@@ -25,15 +27,15 @@ const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State thông báo
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  
+
   // State modal chi tiết thông báo
-  const [selectedNotification, setSelectedNotification] = useState<any>(null);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     if (!token) return;
     setLoadingNotifications(true);
     try {
@@ -44,40 +46,40 @@ const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
     } finally {
       setLoadingNotifications(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     if (token) {
       fetchNotifications();
-      // Gọi API mỗi phút một lần
-      const intervalId = setInterval(fetchNotifications, 60000);
+      const intervalId = setInterval(fetchNotifications, NOTIFICATION_POLL_INTERVAL_MS);
       return () => clearInterval(intervalId);
     }
-  }, [token]);
+  }, [token, fetchNotifications]);
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleReadNotification = async (notification: any) => {
-    if (notification.isRead) return;
+  const handleReadNotification = async (notification: Notification) => {
+    if (notification.read || notification.id === undefined) return;
     try {
       await notificationApi.markAsRead(notification.id);
-      setNotifications(prev => 
-        prev.map(n => n.id === notification.id ? { ...n, isRead: true } : n)
+      setNotifications(prev =>
+        prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
       );
     } catch (error) {
       console.error('Lỗi khi đánh dấu thông báo đã đọc', error);
     }
   };
 
-  const handleNotificationClick = (item: any) => {
+  const handleNotificationClick = (item: Notification) => {
     handleReadNotification(item);
     setSelectedNotification(item);
     setIsModalVisible(true);
     setShowNotifications(false); // Ẩn menu dropdown khi mở popup
   };
 
-  const handleDeleteNotification = async (e: React.MouseEvent, id: number) => {
+  const handleDeleteNotification = async (e: React.MouseEvent, id: number | undefined) => {
     e.stopPropagation(); // Ngăn sự kiện click lan ra ngoài (không trigger handleReadNotification)
+    if (id === undefined) return;
     try {
       await notificationApi.delete(id);
       setNotifications(prev => prev.filter(n => n.id !== id));
@@ -125,7 +127,7 @@ const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
           <CheckOutlined 
             style={{ cursor: 'pointer' }} 
             onClick={async () => {
-              for (const n of notifications.filter(x => !x.isRead)) {
+              for (const n of notifications.filter(x => !x.read)) {
                 await handleReadNotification(n);
               }
             }} 
@@ -143,7 +145,7 @@ const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
             <List.Item 
               style={{ 
                 cursor: 'pointer', 
-                background: item.isRead ? '#fff' : '#f4f9fd',
+                background: item.read ? '#fff' : '#f4f9fd',
                 padding: '16px 16px',
                 borderBottom: '1px solid #e8e8e8',
                 position: 'relative'
@@ -155,7 +157,7 @@ const Header: React.FC<HeaderProps> = ({ showSearch, fullWidth }) => {
                   
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
                     <Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic', color: '#b3b3b3' }}>
-                      {timeAgo(item.createdAt)}
+                      {item.createdAt ? timeAgo(item.createdAt) : ''}
                     </Text>
                   </div>
                 </div>

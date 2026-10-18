@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { chatApi } from '../api';
+import { chatApi, ChatMessage } from '../api';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+type Message = ChatMessage;
+
+export const LOGIN_REQUIRED_REPLY = '🔒 Vui lòng đăng nhập để sử dụng trợ lý AI.';
 
 const QUICK_QUESTIONS = [
   { label: '🏨 Xem danh sách khách sạn', value: 'Website có những khách sạn nào ở Hà Nội? Liệt kê tên và địa chỉ.' },
@@ -36,10 +35,15 @@ const AIAssistantWidget: React.FC = () => {
     setShowQuick(false);
     const userMsg: Message = { role: 'user', content: text };
     const updated = [...messages, userMsg];
-    setMessages(updated);
     setInput('');
+    // The chat endpoint requires authentication so anonymous visitors cannot spend the AI quota.
+    if (!localStorage.getItem('token')) {
+      setMessages([...updated, { role: 'assistant', content: LOGIN_REQUIRED_REPLY }]);
+      return;
+    }
+    setMessages(updated);
     setLoading(true);
-try {
+    try {
       // 🟢 Thay vì gọi callOpenAI, giờ ta gọi chatApi chọc xuống Backend
       const data = await chatApi.sendMessage(updated, {
         name: "Hệ thống Booking Nhom2",

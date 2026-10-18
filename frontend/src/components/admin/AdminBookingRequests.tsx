@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Table, Tag, Button, Spin, Empty, message, Modal, Input, Card, Select } from 'antd';
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons';
-import { adminApi } from '../../api';
+import { adminApi, BookingRequestStatus } from '../../api';
+import type { BookingRequest } from '../../api-generated';
 
 const AdminBookingRequests: React.FC = () => {
-  const [requests, setRequests] = useState<any[]>([]);
+  const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<any>(null);
-  
+  const [filterStatus, setFilterStatus] = useState<BookingRequestStatus | undefined>(undefined);
+
   const [modalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'APPROVE' | 'REJECT'>('APPROVE');
   const [adminResponse, setAdminResponse] = useState('');
   const [currentRequestId, setCurrentRequestId] = useState<number | null>(null);
 
-  const loadRequests = () => {
+  const loadRequests = useCallback(() => {
     setLoading(true);
     adminApi.getBookingRequests(filterStatus)
       .then(res => {
@@ -24,11 +25,11 @@ const AdminBookingRequests: React.FC = () => {
         console.error(err);
       })
       .finally(() => setLoading(false));
-  };
+  }, [filterStatus]);
 
   useEffect(() => {
     loadRequests();
-  }, [filterStatus]);
+  }, [loadRequests]);
 
   const openModal = (id: number, type: 'APPROVE' | 'REJECT') => {
     setCurrentRequestId(id);
@@ -61,7 +62,7 @@ const AdminBookingRequests: React.FC = () => {
     }
   };
 
-  const getTypeTag = (type: string) => {
+  const getTypeTag = (type?: string) => {
     switch (type) {
       case 'CANCEL': return <Tag color="magenta">Hủy Booking</Tag>;
       case 'CHANGE_DATE': return <Tag color="cyan">Đổi ngày</Tag>;
@@ -69,7 +70,7 @@ const AdminBookingRequests: React.FC = () => {
     }
   };
 
-  const getStatusTag = (status: string) => {
+  const getStatusTag = (status?: string) => {
     switch (status) {
       case 'PENDING': return <Tag color="gold">Chờ xử lý</Tag>;
       case 'APPROVED': return <Tag color="green">Đã duyệt</Tag>;
@@ -83,7 +84,7 @@ const AdminBookingRequests: React.FC = () => {
     { 
       title: 'Mã Booking', 
       key: 'booking',
-      render: (_: any, record: any) => <b>#{record.booking?.id || 'N/A'}</b>
+      render: (_: unknown, record: BookingRequest) => <b>#{record.booking?.id || 'N/A'}</b>
     },
     { 
       title: 'Loại yêu cầu', 
@@ -94,7 +95,7 @@ const AdminBookingRequests: React.FC = () => {
     { 
       title: 'Chi tiết yêu cầu', 
       key: 'details',
-      render: (_: any, record: any) => (
+      render: (_: unknown, record: BookingRequest) => (
         <div style={{ fontSize: 13 }}>
           {record.type === 'CHANGE_DATE' && (
             <div style={{ marginBottom: 4, color: '#006ce4' }}>
@@ -122,14 +123,16 @@ const AdminBookingRequests: React.FC = () => {
     {
       title: 'Hành động',
       key: 'action',
-      render: (_: any, record: any) => (
-        record.status === 'PENDING' ? (
+      render: (_: unknown, record: BookingRequest) => {
+        const requestId = record.id;
+        if (record.status !== 'PENDING' || requestId === undefined) return null;
+        return (
           <div style={{ display: 'flex', gap: 6 }}>
-            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openModal(record.id, 'APPROVE')}>Duyệt</Button>
-            <Button size="small" danger icon={<CloseOutlined />} onClick={() => openModal(record.id, 'REJECT')}>Từ chối</Button>
+            <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => openModal(requestId, 'APPROVE')}>Duyệt</Button>
+            <Button size="small" danger icon={<CloseOutlined />} onClick={() => openModal(requestId, 'REJECT')}>Từ chối</Button>
           </div>
-        ) : null
-      )
+        );
+      }
     },
   ];
 

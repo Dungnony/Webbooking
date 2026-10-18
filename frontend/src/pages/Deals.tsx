@@ -1,17 +1,12 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ThunderboltOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
-
-
 const Deals: React.FC = () => {
-  const navigate = useNavigate();
-
   return (
     <div className="page-wrapper">
-      <Header showSearch />
+      <Header />
 
       {/* Hero */}
       <div style={{ background: 'linear-gradient(135deg, #cc0000, #ff6600)', padding: '48px 0' }}>

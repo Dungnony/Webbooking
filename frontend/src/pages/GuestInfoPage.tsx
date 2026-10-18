@@ -1,20 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Form, Input, DatePicker, Button, Divider, message, Row, Col } from 'antd';
+import { Form, Input, DatePicker, Button, message, Row, Col } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined, CalendarOutlined, ProfileOutlined, BankOutlined } from '@ant-design/icons';
 import moment, { Moment } from 'moment';
 import Header from '../components/Header';
-import { getHotelImage } from '../components/HotelCard';
-import { hotelApi, bookingApi } from '../api';
+import { getHotelImage } from '../utils/imageUtils';
+import { hotelApi, bookingApi, CreateBookingPayload, HotelWithStats } from '../api';
+import type { BookingFlowState, GuestInfo } from '../types/bookingFlow';
+import { getErrorMessage } from '../utils/errors';
+
+/** Optional pre-selection passed from HotelDetailPage. */
+interface GuestInfoLocationState {
+  checkIn?: string;
+  checkOut?: string;
+  roomId?: number;
+}
 
 const GuestInfoPage: React.FC = () => {
   const { hotelId } = useParams<{ hotelId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const locationState = (location.state as any) || {};
-  const [form] = Form.useForm();
-  const [hotel, setHotel] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const locationState = (location.state as GuestInfoLocationState | null) || {};
+  const [form] = Form.useForm<GuestInfo>();
+  const [hotel, setHotel] = useState<HotelWithStats | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [checkIn, setCheckIn] = useState<Moment | null>(
@@ -31,7 +39,7 @@ const GuestInfoPage: React.FC = () => {
   const nights = checkIn && checkOut ? checkOut.diff(checkIn, 'day') : 2;
 
   // Tính giá dựa trên phòng được chọn
-  const selectedRoom = hotel?.rooms?.find((r: any) => r.id === selectedRoomId) ?? hotel?.rooms?.[0] ?? null;
+  const selectedRoom = hotel?.rooms?.find(r => r.id === selectedRoomId) ?? hotel?.rooms?.[0] ?? null;
   const pricePerNight = selectedRoom?.pricePerNight ?? 0;
   const totalPrice = pricePerNight * Math.max(1, nights);
 
@@ -40,55 +48,41 @@ const GuestInfoPage: React.FC = () => {
     if (hotelId) {
       hotelApi.getById(Number(hotelId))
         .then(res => setHotel(res.data))
-        .catch(() => {});
+        .catch(err => message.error(getErrorMessage(err, 'Không thể tải thông tin khách sạn')));
     }
   }, [hotelId, token, navigate]);
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: GuestInfo) => {
     if (!checkIn || !checkOut) {
       message.error('Vui lòng chọn ngày nhận và trả phòng!');
       return;
     }
+    const roomToBook = selectedRoom;
+    if (roomToBook?.id === undefined) {
+      message.error('Không tìm thấy thông tin phòng. Vui lòng quay lại trang khách sạn và thử lại!');
+      return;
+    }
     setSubmitting(true);
     try {
-      const roomToBook = selectedRoom;
-      if (!roomToBook) {
-        message.error('Không tìm thấy thông tin phòng. Vui lòng quay lại trang khách sạn và thử lại!');
-        setSubmitting(false);
-        return;
-      }
-      const bookingData = {
-        checkInDate: checkIn?.format('YYYY-MM-DD'),
-        checkOutDate: checkOut?.format('YYYY-MM-DD'),
+      const bookingData: CreateBookingPayload = {
+        checkInDate: checkIn.format('YYYY-MM-DD'),
+        checkOutDate: checkOut.format('YYYY-MM-DD'),
         rooms: [{ roomId: roomToBook.id, quantity: 1 }]
-      } as any;
+      };
       const booking = await bookingApi.create(Number(hotelId), bookingData);
-      navigate('/booking/payment', {
-        state: {
-          booking: booking.data,
-          hotel,
-          guestInfo: values,
-          room: roomToBook,
-          checkIn: checkIn.format('DD/MM/YYYY'),
-          checkOut: checkOut.format('DD/MM/YYYY'),
-          nights,
-          totalPrice,
-        },
-      });
-    } catch (err: any) {
-      let errorMsg = 'Đặt phòng thất bại. Vui lòng thử lại!';
-      if (err?.response?.data) {
-        if (typeof err.response.data === 'string' && err.response.data.trim() !== '') {
-          errorMsg = err.response.data;
-        } else if (err.response.data.message && err.response.data.message.trim() !== '') {
-          errorMsg = err.response.data.message;
-        } else if (err.response.data.error) {
-          errorMsg = `Lỗi hệ thống: ${err.response.data.error}`;
-        }
-      } else if (err?.message) {
-        errorMsg = err.message;
-      }
-      message.error(errorMsg);
+      const flowState: BookingFlowState = {
+        booking: booking.data,
+        hotel,
+        guestInfo: values,
+        room: roomToBook,
+        checkIn: checkIn.format('DD/MM/YYYY'),
+        checkOut: checkOut.format('DD/MM/YYYY'),
+        nights,
+        totalPrice,
+      };
+      navigate('/booking/payment', { state: flowState });
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Đặt phòng thất bại. Vui lòng thử lại!'));
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +90,7 @@ const GuestInfoPage: React.FC = () => {
 
   return (
     <div className="page-wrapper" style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-      <Header showSearch />
+      <Header />
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 24px 48px' }}>
         {/* Back button */}

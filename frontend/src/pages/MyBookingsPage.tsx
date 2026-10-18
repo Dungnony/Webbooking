@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tabs, Button, Tag, Empty, message, Modal, Spin } from 'antd';
+import { Tabs, Button, Empty, message, Modal, Spin } from 'antd';
 import { CalendarOutlined, CloseCircleOutlined, EyeOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import AuthGuard from '../components/AuthGuard';
-import { getHotelImage } from '../components/HotelCard';
-import { bookingApi, paymentApi } from '../api';
+import { getHotelImage } from '../utils/imageUtils';
+import { bookingApi, paymentApi, PaymentQr } from '../api';
+import type { Booking } from '../api-generated';
+import { getErrorMessage } from '../utils/errors';
+
+const PAYMENT_POLL_INTERVAL_MS = 3000;
 
 const statusConfig: Record<string, { label: string; color: string; className: string }> = {
   PENDING: { label: 'Chờ xác nhận', color: 'warning', className: 'status-pending' },
@@ -14,27 +17,28 @@ const statusConfig: Record<string, { label: string; color: string; className: st
   CANCELLED: { label: 'Đã hủy', color: 'error', className: 'status-cancelled' },
 };
 
+// Route is wrapped in <AuthGuard> in App.tsx.
 const MyBookingsPage: React.FC = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [cancellingId, setCancellingId] = useState<number | null>(null);
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
-  const [paymentQrData, setPaymentQrData] = useState<any>(null);
+  const [paymentQrData, setPaymentQrData] = useState<PaymentQr | null>(null);
   const [payingBookingId, setPayingBookingId] = useState<number | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
 
-  const fetchBookings = () => {
+  const fetchBookings = useCallback(() => {
     setLoading(true);
     bookingApi.getMy()
       .then(res => setBookings(res.data || []))
-      .catch(() => message.error('Không thể tải lịch sử đặt phòng!'))
+      .catch(err => message.error(getErrorMessage(err, 'Không thể tải lịch sử đặt phòng!')))
       .finally(() => setLoading(false));
-  };
+  }, []);
 
-  useEffect(() => { fetchBookings(); }, []);
+  useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
   const handleCancel = (bookingId: number) => {
     Modal.confirm({
@@ -49,8 +53,8 @@ const MyBookingsPage: React.FC = () => {
           await bookingApi.cancel(bookingId);
           message.success('Đã hủy đặt phòng thành công!');
           fetchBookings();
-        } catch {
-          message.error('Hủy đặt phòng thất bại!');
+        } catch (err) {
+          message.error(getErrorMessage(err, 'Hủy đặt phòng thất bại!'));
         } finally {
           setCancellingId(null);
         }
@@ -65,8 +69,8 @@ const MyBookingsPage: React.FC = () => {
       setPaymentQrData(data);
       setPayingBookingId(bookingId);
       setPaymentModalVisible(true);
-    } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'Không thể tải thông tin thanh toán. Booking phải ở trạng thái Chờ xác nhận mới thanh toán được!');
+    } catch (e) {
+      message.error(getErrorMessage(e, 'Không thể tải thông tin thanh toán. Booking phải ở trạng thái Chờ xác nhận mới thanh toán được!'));
     } finally {
       setPaymentLoading(false);
     }
@@ -79,7 +83,7 @@ const MyBookingsPage: React.FC = () => {
     const interval = setInterval(async () => {
       try {
         const res = await bookingApi.getMy();
-        const currentBooking = res.data?.find((b: any) => b.id === payingBookingId);
+        const currentBooking = res.data?.find(b => b.id === payingBookingId);
         if (currentBooking && currentBooking.paymentStatus === 'PAID') {
           clearInterval(interval);
           message.success('Thanh toán thành công! Hệ thống đã tự động xác nhận.');
@@ -87,12 +91,12 @@ const MyBookingsPage: React.FC = () => {
           fetchBookings(); // Reload list
         }
       } catch (e) {
-        // ignore
+        console.warn('Payment status poll failed, retrying', e);
       }
-    }, 3000);
+    }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [paymentModalVisible, payingBookingId]);
+  }, [paymentModalVisible, payingBookingId, fetchBookings]);
 
   const handleConfirmPayment = async () => {
     if (!payingBookingId) return;
@@ -102,8 +106,8 @@ const MyBookingsPage: React.FC = () => {
       message.success('Đã gửi thông báo xác nhận thanh toán tới Admin!');
       setPaymentModalVisible(false);
       fetchBookings();
-    } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'Xác nhận thanh toán thất bại');
+    } catch (e) {
+      message.error(getErrorMessage(e, 'Xác nhận thanh toán thất bại'));
     } finally {
       setPaymentLoading(false);
     }
@@ -114,11 +118,12 @@ const MyBookingsPage: React.FC = () => {
     return b.status === activeTab;
   });
 
-  const BookingCard = ({ booking }: { booking: any }) => {
-    const config = statusConfig[booking.status] || statusConfig.PENDING;
+  const BookingCard = ({ booking }: { booking: Booking }) => {
+    const config = (booking.status && statusConfig[booking.status]) || statusConfig.PENDING;
     const checkIn = booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString('vi-VN') : '—';
     const checkOut = booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString('vi-VN') : '—';
-    const hotelId = booking.hotel?.id || booking.hotelId || 1;
+    const bookingId = booking.id;
+    if (bookingId === undefined) return null;
 
     return (
       <div className="booking-card">
@@ -179,7 +184,7 @@ const MyBookingsPage: React.FC = () => {
                 <Button
                   size="small"
                   type="primary"
-                  onClick={() => handleOpenPayment(booking.id)}
+                  onClick={() => handleOpenPayment(bookingId)}
                 >
                   Thanh toán (QR)
                 </Button>
@@ -187,7 +192,7 @@ const MyBookingsPage: React.FC = () => {
               <Button
                 size="small"
                 icon={<EyeOutlined />}
-                onClick={() => navigate(`/my-bookings/${booking.id}`)}
+                onClick={() => navigate(`/my-bookings/${bookingId}`)}
               >
                 Xem
               </Button>
@@ -196,8 +201,8 @@ const MyBookingsPage: React.FC = () => {
                   size="small"
                   danger
                   icon={<CloseCircleOutlined />}
-                  loading={cancellingId === booking.id}
-                  onClick={() => handleCancel(booking.id)}
+                  loading={cancellingId === bookingId}
+                  onClick={() => handleCancel(bookingId)}
                 >
                   Hủy
                 </Button>
@@ -210,9 +215,9 @@ const MyBookingsPage: React.FC = () => {
   };
 
   return (
-    <AuthGuard>
+    <>
       <div className="page-wrapper">
-        <Header showSearch />
+        <Header />
 
         <div style={{ background: '#003b95', padding: '24px 0' }}>
           <div className="container">
@@ -314,7 +319,7 @@ const MyBookingsPage: React.FC = () => {
           )}
         </Modal>
       </div>
-    </AuthGuard>
+    </>
   );
 };
 

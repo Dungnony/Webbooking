@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, message, Divider } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { authApi } from '../api';
+import { saveSession } from '../utils/auth';
+import { getErrorMessage, getErrorStatus } from '../utils/errors';
 
 const Register: React.FC = () => {
   const [loading, setLoading] = useState(false);
@@ -13,22 +15,19 @@ const Register: React.FC = () => {
   const onRegisterFinish = async (values: { username: string; email: string; password: string }) => {
     setLoading(true);
     try {
-      const res = await authApi.register(values.username, values.password, values.email);
-      const msg: string = res.data as unknown as string;
-
-      if (msg === 'Username already exists') {
-        message.error('Tên đăng nhập đã tồn tại! Vui lòng chọn tên khác.');
-        return;
-      }
-
+      await authApi.register(values.username, values.password, values.email);
       message.success('Mã OTP đã được gửi đến email của bạn! Vui lòng kiểm tra.');
       setRegisterData(values);
       setStep('otp');
-    } catch (error: any) {
-      if (!error?.status) {
+    } catch (error) {
+      if (getErrorStatus(error) === undefined) {
         message.error('Không thể kết nối server. Hãy kiểm tra backend đang chạy!');
+      } else if (getErrorMessage(error, '') === 'Username already exists') {
+        message.error('Tên đăng nhập đã tồn tại! Vui lòng chọn tên khác.');
+      } else if (getErrorMessage(error, '') === 'Email already exists') {
+        message.error('Email này đã có tài khoản! Hãy đăng nhập hoặc dùng "Quên mật khẩu".');
       } else {
-        message.error(error?.error || 'Thao tác thất bại. Vui lòng thử lại.');
+        message.error(getErrorMessage(error, 'Thao tác thất bại. Vui lòng thử lại.'));
       }
     } finally {
       setLoading(false);
@@ -39,7 +38,7 @@ const Register: React.FC = () => {
     setLoading(true);
     try {
       const res = await authApi.verifyOtp(registerData.email, values.otp.trim());
-      const msg = typeof res === 'string' ? res : (res as any).data;
+      const msg = res.data;
 
       if (msg === 'Register success' || msg?.includes('success')) {
         message.success('Đăng ký tài khoản thành công! 🎉');
@@ -47,49 +46,35 @@ const Register: React.FC = () => {
       } else {
         message.error('Mã OTP không hợp lệ hoặc có lỗi xảy ra.');
       }
-    } catch (error: any) {
-      const errResponse = error?.response?.data || error?.error || error?.message || 'Xác thực OTP thất bại. Vui lòng thử lại.';
-      
+    } catch (error) {
+      const errResponse = getErrorMessage(error, 'Xác thực OTP thất bại. Vui lòng thử lại.');
+
       if (errResponse === 'OTP invalid') {
-        message.error('Mã OTP không hợp lệ! Vui lòng thử lại.');
+        message.error('Mã OTP không đúng hoặc đã hết hạn! Vui lòng thử lại hoặc đăng ký lại để nhận mã mới.');
+      } else if (errResponse === 'Email already exists') {
+        message.error('Email này vừa được dùng cho tài khoản khác. Vui lòng đăng nhập.');
+        setStep('register');
       } else if (errResponse === 'No registration request found') {
         message.error('Không tìm thấy yêu cầu đăng ký. Vui lòng đăng ký lại.');
         setStep('register');
       } else {
-        message.error(typeof errResponse === 'string' ? errResponse : 'Xác thực OTP thất bại. Vui lòng thử lại.');
+        message.error(errResponse);
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
     if (!credentialResponse.credential) return;
     setLoading(true);
     try {
-      const res = await authApi.googleLogin(credentialResponse.credential);
-      const token: string = res;
-
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function (c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      const payload = JSON.parse(jsonPayload);
-
-      const role = payload.role || 'USER';
-      localStorage.setItem('token', token);
-      localStorage.setItem('username', payload.sub || 'GoogleUser');
-      localStorage.setItem('role', role);
-
+      const token = await authApi.googleLogin(credentialResponse.credential);
+      const role = saveSession(token, 'GoogleUser');
       message.success('Đăng nhập bằng Google thành công! 👋');
-      if (role === 'ADMIN') {
-        navigate('/admin');
-      } else {
-        navigate('/');
-      }
-    } catch (error: any) {
-      message.error('Lỗi đăng nhập Google: ' + (error?.message || 'Không xác định'));
+      navigate(role === 'ADMIN' ? '/admin' : '/');
+    } catch (error) {
+      message.error('Lỗi đăng nhập Google: ' + getErrorMessage(error, 'Không xác định'));
     } finally {
       setLoading(false);
     }

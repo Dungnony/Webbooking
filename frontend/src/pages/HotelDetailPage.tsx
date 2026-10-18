@@ -1,19 +1,16 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Row, Col, Skeleton, Tag, Button, Divider, Empty, Input, message, Modal, Drawer } from 'antd';
+import { Row, Col, Skeleton, Tag, Button, Divider, message, Drawer } from 'antd';
 import {
   EnvironmentOutlined,
-  WifiOutlined, CarOutlined, CoffeeOutlined,
-  CheckCircleOutlined, HeartOutlined, HeartFilled,
-  LeftOutlined, ShareAltOutlined, StarFilled,
-  UserOutlined, DeleteOutlined, SendOutlined,
-  StarOutlined,
+  HeartOutlined, HeartFilled,
+  LeftOutlined, ShareAltOutlined,
 } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { getHotelImage } from '../components/HotelCard';
-import { hotelApi, reviewApi } from '../api';
-import { useWishlist } from '../context/WishlistContext';
+import { hotelApi, reviewApi, HotelWithStats } from '../api';
+import type { Review } from '../api-generated';
+import { useWishlist } from '../context/useWishlist';
 import { transformImageUrl } from '../utils/imageUtils';
 import { cachedFetch, HOTEL_DETAIL_TTL } from '../utils/apiCache';
 import HotelReviewAndChatPage from './HotelReviewAndChatPage';
@@ -30,51 +27,7 @@ const AMENITIES = [
 ];
 
 const NAV_TABS = ['Tổng quan', 'Thông tin & giá', 'Tiện nghi', 'Quy tắc chung', 'Đánh giá của khách'];
-
-/* ── Star Rating Component ── */
-const StarRating = ({
-  value,
-  hover,
-  onChange,
-  onHover,
-  onLeave,
-  size = 28,
-  count = 10,
-  readonly = false,
-}: {
-  value: number;
-  hover?: number;
-  onChange?: (v: number) => void;
-  onHover?: (v: number) => void;
-  onLeave?: () => void;
-  size?: number;
-  count?: number;
-  readonly?: boolean;
-}) => {
-  const active = hover || value;
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-      {Array.from({ length: count }, (_, i) => i + 1).map(star => (
-        <span
-          key={star}
-          style={{
-            cursor: readonly ? 'default' : 'pointer',
-            fontSize: size,
-            color: star <= active ? '#febb02' : '#d9d9d9',
-            transition: 'color 0.15s, transform 0.15s',
-            transform: !readonly && star <= (hover || 0) ? 'scale(1.15)' : 'scale(1)',
-            lineHeight: 1,
-          }}
-          onClick={() => !readonly && onChange?.(star)}
-          onMouseEnter={() => !readonly && onHover?.(star)}
-          onMouseLeave={() => !readonly && onLeave?.()}
-        >
-          <StarFilled />
-        </span>
-      ))}
-    </div>
-  );
-};
+const REVIEWS_CACHE_TTL_MS = 60_000;
 
 /* ── Rating Label Helper ── */
 const getRatingLabel = (score: number) => {
@@ -85,29 +38,10 @@ const getRatingLabel = (score: number) => {
   return 'Trung bình';
 };
 
-const getRatingColor = (score: number) => {
-  if (score >= 9) return '#008234';
-  if (score >= 7) return '#006ce4';
-  if (score >= 5) return '#f56600';
-  return '#d4111e';
-};
-
-/* ── Format Time ── */
-const formatTimeAgo = (dateStr: string) => {
-  const d = new Date(dateStr);
-  const now = new Date();
-  const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 2592000) return `${Math.floor(diff / 86400)} ngày trước`;
-  return d.toLocaleDateString('vi-VN');
-};
-
 const HotelDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [hotel, setHotel] = useState<any>(null);
+  const [hotel, setHotel] = useState<HotelWithStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Tổng quan');
   const { isInWishlist, toggleWish } = useWishlist();
@@ -115,60 +49,26 @@ const HotelDetailPage: React.FC = () => {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [reviewDrawerVisible, setReviewDrawerVisible] = useState(false);
 
-  // ── Review state ──
-  const [allReviews, setAllReviews] = useState<any[]>([]);
-  const [reviewRating, setReviewRating] = useState(0);
-  const [reviewHover, setReviewHover] = useState(0);
-  const [reviewComment, setReviewComment] = useState('');
-  const [submittingReview, setSubmittingReview] = useState(false);
-
-  const isLoggedIn = !!localStorage.getItem('token');
-  const currentUsername = useMemo(() => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return null;
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.sub || payload.username || null;
-    } catch { return null; }
-  }, []);
+  // Đánh giá chỉ dùng để hiển thị điểm; việc viết đánh giá nằm trong drawer HotelReviewAndChatPage
+  const [allReviews, setAllReviews] = useState<Review[]>([]);
 
   // Lọc đánh giá cho khách sạn này
   const reviews = useMemo(() => {
-    return allReviews.filter((r: any) => r.hotel?.id === Number(id));
+    return allReviews.filter(r => r.hotel?.id === Number(id));
   }, [allReviews, id]);
 
   // Tính toán thống kê từ các đánh giá đã lọc
   const reviewStats = useMemo(() => {
     if (reviews.length === 0) return { avg: null, total: 0 };
-    const sum = reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
+    const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
     return { avg: sum / reviews.length, total: reviews.length };
-  }, [reviews]);
-
-  // Phân bổ đánh giá
-  const ratingDistribution = useMemo(() => {
-    const dist = [
-      { label: 'Xuất sắc', range: '9-10', count: 0, color: '#008234' },
-      { label: 'Rất tốt', range: '7-8', count: 0, color: '#006ce4' },
-      { label: 'Ổn', range: '5-6', count: 0, color: '#f56600' },
-      { label: 'Kém', range: '3-4', count: 0, color: '#d4111e' },
-      { label: 'Rất kém', range: '1-2', count: 0, color: '#8c0000' },
-    ];
-    reviews.forEach((r: any) => {
-      const s = r.rating;
-      if (s >= 9) dist[0].count++;
-      else if (s >= 7) dist[1].count++;
-      else if (s >= 5) dist[2].count++;
-      else if (s >= 3) dist[3].count++;
-      else dist[4].count++;
-    });
-    return dist;
   }, [reviews]);
 
   const fetchReviews = useCallback(() => {
     // Reviews ít thay đổi → cache 60s
-    cachedFetch('reviews_all', () => reviewApi.getAll(), 60_000)
-      .then((data: any) => setAllReviews(data || []))
-      .catch(() => { });
+    cachedFetch('reviews_all', () => reviewApi.getAll(), REVIEWS_CACHE_TTL_MS)
+      .then(data => setAllReviews(data || []))
+      .catch(err => console.error('Failed to load reviews', err));
   }, []);
 
   useEffect(() => {
@@ -176,7 +76,7 @@ const HotelDetailPage: React.FC = () => {
     // Cache chi tiết khách sạn 2 phút
     cachedFetch(`hotel_${id}`, () => hotelApi.getById(Number(id)), HOTEL_DETAIL_TTL)
       .then(data => setHotel(data))
-      .catch(() => { })
+      .catch(err => console.error('Failed to load hotel', err))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -187,8 +87,8 @@ const HotelDetailPage: React.FC = () => {
     if (!hotel) return [];
     const imgs: string[] = [];
     if (hotel.imageUrl) imgs.push(transformImageUrl(hotel.imageUrl) as string);
-    hotel.rooms?.forEach((room: any) => {
-      room.images?.forEach((img: any) => {
+    hotel.rooms?.forEach(room => {
+      room.images?.forEach(img => {
         if (img.imageUrl) {
           const tUrl = transformImageUrl(img.imageUrl) as string;
           if (!imgs.includes(tUrl)) imgs.push(tUrl);
@@ -197,52 +97,6 @@ const HotelDetailPage: React.FC = () => {
     });
     return imgs;
   }, [hotel]);
-
-  const handleSubmitReview = async () => {
-    if (!reviewRating) {
-      message.warning('Vui lòng chọn điểm đánh giá!');
-      return;
-    }
-    if (!reviewComment.trim()) {
-      message.warning('Vui lòng nhập nhận xét!');
-      return;
-    }
-
-    setSubmittingReview(true);
-    try {
-      // Lấy ID người dùng hiện tại từ token
-      const token = localStorage.getItem('token');
-      let userId: number | null = null;
-      if (token) {
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          userId = payload.userId || payload.id || null;
-        } catch { /* ignore */ }
-      }
-
-      const reviewData: any = {
-        rating: reviewRating,
-        comment: reviewComment,
-        hotel: { id: Number(id) },
-      };
-
-      // Thêm ID người dùng nếu đã đăng nhập
-      if (userId) {
-        reviewData.user = { id: userId };
-      }
-
-      await reviewApi.create(reviewData);
-      message.success('🎉 Đánh giá của bạn đã được gửi thành công!');
-      setReviewRating(0);
-      setReviewComment('');
-      fetchReviews();
-    } catch (e: any) {
-      message.error('Gửi đánh giá thất bại! Vui lòng thử lại.');
-    } finally {
-      setSubmittingReview(false);
-    }
-  };
-
 
   const handleTabClick = (tab: string) => {
     if (tab === 'Đánh giá của khách') {
@@ -276,7 +130,7 @@ const HotelDetailPage: React.FC = () => {
 
   if (loading) return (
     <div className="page-wrapper">
-      <Header showSearch />
+      <Header />
       <div className="container" style={{ padding: '24px' }}>
         <Skeleton active paragraph={{ rows: 10 }} />
       </div>
@@ -285,7 +139,7 @@ const HotelDetailPage: React.FC = () => {
 
   if (!hotel) return (
     <div className="page-wrapper">
-      <Header showSearch />
+      <Header />
       <div style={{ textAlign: 'center', padding: '80px 24px' }}>
         <div style={{ fontSize: 48 }}>🏨</div>
         <h2 style={{ marginTop: 12 }}>Không tìm thấy khách sạn</h2>
@@ -304,9 +158,6 @@ const HotelDetailPage: React.FC = () => {
   const ratingLabel = displayRatingNum
     ? getRatingLabel(displayRatingNum)
     : null;
-
-  // Kiểm tra xem người dùng hiện tại đã đánh giá chưa
-  const hasReviewed = reviews.some((r: any) => r.user?.username === currentUsername);
 
   const handleShare = async () => {
     try {
@@ -327,7 +178,7 @@ const HotelDetailPage: React.FC = () => {
 
   return (
     <div className="page-wrapper">
-      <Header showSearch />
+      <Header />
 
       {/* ── Breadcrumb + Back ── */}
       <div style={{ borderBottom: '1px solid var(--border)' }}>
@@ -570,7 +421,7 @@ const HotelDetailPage: React.FC = () => {
             {hotel.rooms && hotel.rooms.length > 0 && (
               <div id="rooms-section" style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 4, padding: 20, marginBottom: 16 }}>
                 <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>Phòng trống</h3>
-                {hotel.rooms.map((room: any) => {
+                {hotel.rooms.map(room => {
                   const roomImg = room.images?.[0]?.imageUrl;
                   return (
                     <div key={room.id} className="room-item-row" style={{
