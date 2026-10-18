@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Form, Input, Button, message, Divider, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { UserOutlined, SaveOutlined, MailOutlined, LockOutlined, HeartOutlined, CalendarOutlined, HomeOutlined } from '@ant-design/icons';
-import { userApi } from '../api';
-import type { User } from '../api-generated';
+import { userApi, UserProfile } from '../api';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import { clearSession } from '../utils/auth';
 import { getErrorMessage } from '../utils/errors';
 
 interface EmailFormValues {
@@ -23,7 +23,7 @@ const Profile: React.FC = () => {
   const navigate = useNavigate();
   const [emailLoading, setEmailLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   // The address the OTP was sent to; confirming always uses it, even if the input was edited afterwards.
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [emailForm] = Form.useForm<EmailFormValues>();
@@ -93,7 +93,7 @@ const Profile: React.FC = () => {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    clearSession();
     message.success('Đã đăng xuất!');
     navigate('/login');
   };
@@ -107,8 +107,8 @@ const Profile: React.FC = () => {
           {/* Sidebar */}
           <aside className="profile-sidebar">
             <div className="profile-avatar" style={{ overflow: 'hidden', padding: 0 }}>
-              {localStorage.getItem('avatarUrl') ? (
-                <img src={localStorage.getItem('avatarUrl') as string} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               ) : (
                 localUsername.charAt(0).toUpperCase()
               )}

@@ -70,6 +70,9 @@ export interface UpdateProfilePayload {
   newPassword: string;
 }
 
+/** `avatarUrl` is newer than api-generated.ts; drop this once the client is regenerated. */
+export type UserProfile = User & { avatarUrl?: string };
+
 export type AdminOverview = Record<string, number>;
 
 // ─── Param mặc định: luôn parse response thành JSON ──────────
@@ -141,15 +144,22 @@ export const userApi = {
 
   getMe: () =>
     unwrap(
-      swaggerApi.request<User>({ path: '/users/me', method: 'GET', secure: true, ...JSON_FMT }),
+      swaggerApi.request<UserProfile>({ path: '/users/me', method: 'GET', secure: true, ...JSON_FMT }),
       'Không thể tải hồ sơ',
     ),
   updateMe: (data: UpdateProfilePayload) =>
     unwrap(
-      swaggerApi.request<User>({
+      swaggerApi.request<UserProfile>({
         path: '/users/me', method: 'PUT', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
       }),
       'Cập nhật thất bại',
+    ),
+  uploadAvatar: (file: File) =>
+    unwrap(
+      swaggerApi.request<UserProfile>({
+        path: '/users/me/avatar', method: 'POST', body: { file }, secure: true, type: ContentType.FormData, ...JSON_FMT,
+      }),
+      'Tải ảnh đại diện thất bại',
     ),
   /** Sends an OTP to the new address; resolves with the masked address. */
   requestEmailChange: (email: string) =>
@@ -312,6 +322,38 @@ export const reviewApi = {
         path: '/api/reviews', method: 'POST', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
       }),
       'Gửi đánh giá thất bại',
+    ),
+};
+
+// ─── WISHLIST ─────────────────────────────────────────────────
+// Every call returns the user's hotel ids, newest first.
+export const wishlistApi = {
+  get: () =>
+    unwrap(
+      swaggerApi.request<number[]>({ path: '/wishlist', method: 'GET', secure: true, ...JSON_FMT }),
+      'Không thể tải danh sách yêu thích',
+    ),
+  add: (hotelId: number) =>
+    unwrap(
+      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'PUT', secure: true, ...JSON_FMT }),
+      'Không thể thêm vào yêu thích',
+    ),
+  remove: (hotelId: number) =>
+    unwrap(
+      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'DELETE', secure: true, ...JSON_FMT }),
+      'Không thể xóa khỏi yêu thích',
+    ),
+  clear: () =>
+    unwrap(
+      swaggerApi.request<void>({ path: '/wishlist', method: 'DELETE', secure: true }),
+      'Không thể xóa danh sách yêu thích',
+    ),
+  merge: (hotelIds: number[]) =>
+    unwrap(
+      swaggerApi.request<number[]>({
+        path: '/wishlist/merge', method: 'POST', body: hotelIds, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Không thể đồng bộ danh sách yêu thích',
     ),
 };
 

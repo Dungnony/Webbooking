@@ -82,6 +82,14 @@ class UserServiceProfileTest {
     }
 
     @Test
+    void storesTheUploadedAvatarUrl() {
+        User saved = userService.setAvatarUrl("alice", "https://cdn.example/avatars/a.png");
+
+        assertThat(saved.getAvatarUrl()).isEqualTo("https://cdn.example/avatars/a.png");
+        assertThat(saved.getEmail()).isEqualTo("old@example.com");
+    }
+
+    @Test
     void unknownUserIsNotFound() {
         when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
 

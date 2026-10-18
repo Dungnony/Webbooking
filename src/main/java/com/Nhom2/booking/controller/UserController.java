@@ -3,9 +3,12 @@ package com.Nhom2.booking.controller;
 import com.Nhom2.booking.dto.ChangeEmailRequest;
 import com.Nhom2.booking.dto.UpdateProfileRequest;
 import com.Nhom2.booking.entity.User;
+import com.Nhom2.booking.service.ImageStorageService;
 import com.Nhom2.booking.service.UserService;
+import org.springframework.http.MediaType;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,11 +18,14 @@ import java.util.Optional;
 public class UserController {
 
     private final UserService userService;
+    private final ImageStorageService imageStorage;
 
     public UserController(
-            UserService userService
+            UserService userService,
+            ImageStorageService imageStorage
     ) {
         this.userService = userService;
+        this.imageStorage = imageStorage;
     }
 
     // GET ALL
@@ -41,6 +47,15 @@ public class UserController {
             Authentication authentication
     ) {
         return userService.updateProfile(authentication.getName(), request);
+    }
+
+    @PostMapping(value = "/me/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public User uploadAvatar(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication
+    ) {
+        String avatarUrl = imageStorage.store(file, "avatars");
+        return userService.setAvatarUrl(authentication.getName(), avatarUrl);
     }
 
     // Đổi email bước 1: gửi OTP tới email mới, trả về email đã che

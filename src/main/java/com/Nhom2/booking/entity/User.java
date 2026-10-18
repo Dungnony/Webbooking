@@ -28,6 +28,8 @@ public class User {
     @Column(nullable = false, columnDefinition = "varchar(255) default 'USER'")
     private UserRole role;
 
+    private String avatarUrl;
+
     @OneToMany(mappedBy = "user")
     @JsonIgnore
     private List<Booking> bookings;
@@ -71,6 +73,14 @@ public class User {
 
     public void setRole(UserRole role) {
         this.role = role;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 
     public List<Booking> getBookings() {

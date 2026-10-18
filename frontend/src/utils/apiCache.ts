@@ -28,6 +28,9 @@ export const HOTEL_DETAIL_TTL = 2 * 60_000;
 // TTL cho thông báo (thay đổi nhiều): 30 giây
 export const NOTIFICATION_TTL = 30_000;
 
+/** Logged-in user's profile (avatar) cached by the header; invalidated after an avatar upload. */
+export const PROFILE_CACHE_KEY = 'profile_me';
+
 /** Shared so the review form can invalidate the totals cached by the hotel detail page. */
 export const reviewCacheKey = (hotelId: number) => `reviews_hotel_${hotelId}`;
 

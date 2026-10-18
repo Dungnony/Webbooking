@@ -83,6 +83,13 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /** {@code avatarUrl} comes from ImageStorageService after the upload succeeded. */
+    public User setAvatarUrl(String username, String avatarUrl) {
+        User user = getByUsername(username);
+        user.setAvatarUrl(avatarUrl);
+        return userRepository.save(user);
+    }
+
     /**
      * Bước 1 đổi email: gửi OTP tới email MỚI. Email chỉ được đổi sau khi xác nhận OTP,
      * vì Google login gắn tài khoản theo email nên email phải chứng minh được quyền sở hữu.

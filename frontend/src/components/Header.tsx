@@ -1,14 +1,18 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Popover, Badge, List, Typography, Spin, Tooltip, Modal } from 'antd';
+import { Popover, Badge, List, Typography, Spin, Tooltip, Modal, message } from 'antd';
 import { BellOutlined, DeleteOutlined, SyncOutlined, CheckOutlined, DownOutlined, HeartOutlined, CarryOutOutlined } from '@ant-design/icons';
 import { useWishlist } from '../context/useWishlist';
-import { notificationApi } from '../api';
+import { notificationApi, userApi } from '../api';
 import type { Notification } from '../api-generated';
+import { cachedFetch, invalidateCache, PROFILE_CACHE_KEY } from '../utils/apiCache';
+import { clearSession } from '../utils/auth';
+import { getErrorMessage } from '../utils/errors';
 
 const { Text } = Typography;
 
 const NOTIFICATION_POLL_INTERVAL_MS = 60_000;
+const PROFILE_CACHE_TTL_MS = 5 * 60_000;
 
 interface HeaderProps {
   fullWidth?: boolean;
@@ -21,10 +25,16 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
   const isAdmin = localStorage.getItem('role') === 'ADMIN';
   const { wishlist } = useWishlist();
 
-  const [avatarUrl, setAvatarUrl] = useState<string>(
-    localStorage.getItem('avatarUrl') || ''
-  );
+  const [avatarUrl, setAvatarUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The header is on every page, so the profile is cached instead of refetched on each navigation.
+  useEffect(() => {
+    if (!token) return;
+    cachedFetch(PROFILE_CACHE_KEY, () => userApi.getMe().then(data => ({ data })), PROFILE_CACHE_TTL_MS)
+      .then(profile => setAvatarUrl(profile.avatarUrl || ''))
+      .catch(err => console.error('Failed to load profile', err));
+  }, [token]);
 
   // State thông báo
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -89,20 +99,22 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    clearSession();
     navigate('/login');
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target?.result as string;
-      setAvatarUrl(dataUrl);
-      localStorage.setItem('avatarUrl', dataUrl);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const profile = await userApi.uploadAvatar(file);
+      setAvatarUrl(profile.avatarUrl || '');
+      invalidateCache(PROFILE_CACHE_KEY);
+      message.success('Đã cập nhật ảnh đại diện');
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Tải ảnh đại diện thất bại'));
+    }
   };
 
   const timeAgo = (dateString: string) => {
@@ -208,7 +220,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept=".jpg,.jpeg,.png,.webp,.gif"
           style={{ display: 'none' }}
           onChange={handleAvatarChange}
         />
