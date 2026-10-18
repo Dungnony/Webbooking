@@ -56,8 +56,8 @@ const Footer: React.FC = () => {
             <li><a onClick={() => navigate('/register')}>Đăng ký tài khoản</a></li>
             <li><a href="#">Đăng chỗ nghỉ của Quý vị</a></li>
             <li><a href="#">Trợ giúp đối tác</a></li>
-            <li><a href="#">Điều khoản dịch vụ</a></li>
-            <li><a href="#">Chính sách Bảo mật</a></li>
+            <li><a onClick={() => navigate('/terms')}>Điều khoản dịch vụ</a></li>
+            <li><a onClick={() => navigate('/privacy')}>Chính sách Bảo mật</a></li>
           </ul>
         </div>
 

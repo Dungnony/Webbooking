@@ -241,7 +241,7 @@ const Register: React.FC = () => {
 
         <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: '#929292', lineHeight: 1.5 }}>
           Bằng cách đăng ký, bạn đồng ý với{' '}
-          <Link to="/privacy" style={{ color: '#006ce4', fontWeight: 500 }}>Điều khoản sử dụng</Link>{' '}và{' '}
+          <Link to="/terms" style={{ color: '#006ce4', fontWeight: 500 }}>Điều khoản sử dụng</Link>{' '}và{' '}
           <Link to="/privacy" style={{ color: '#006ce4', fontWeight: 500 }}>Chính sách bảo mật</Link> của chúng tôi.
         </div>
       </div>

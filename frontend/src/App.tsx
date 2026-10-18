@@ -28,6 +28,7 @@ const Profile = lazy(() => import('./pages/Profile'));
 // ── UX Extras
 const Wishlist = lazy(() => import('./pages/Wishlist'));
 const Deals = lazy(() => import('./pages/Deals'));
+const Policies = lazy(() => import('./pages/Policies'));
 
 // ── Admin
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
@@ -67,6 +68,8 @@ function App() {
             {/* ── UX Extras */}
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/deals" element={<Deals />} />
+            <Route path="/terms" element={<Policies section="terms" />} />
+            <Route path="/privacy" element={<Policies section="privacy" />} />
 
             {/* ── Admin */}
             <Route path="/admin" element={<AuthGuard requiredRole="ADMIN"><AdminDashboard /></AuthGuard>} />
