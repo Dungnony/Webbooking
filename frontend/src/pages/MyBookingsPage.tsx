@@ -11,6 +11,23 @@ import { getErrorMessage } from '../utils/errors';
 
 const PAYMENT_POLL_INTERVAL_MS = 3000;
 
+const ACTIVE_STATUSES: ReadonlyArray<Booking['status']> = ['PENDING', 'CONFIRMED'];
+
+/** Mirrors the backend rule: cancelling is only possible before the check-in date. */
+const isBeforeCheckIn = (booking: Booking) => {
+  if (!booking.checkInDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(`${booking.checkInDate}T00:00:00`) > today;
+};
+
+// Unpaid bookings are cancelled directly; paid ones need an admin to approve and refund.
+const canCancelDirectly = (booking: Booking) =>
+  ACTIVE_STATUSES.includes(booking.status) && booking.paymentStatus !== 'PAID' && isBeforeCheckIn(booking);
+
+const canRequestCancel = (booking: Booking) =>
+  ACTIVE_STATUSES.includes(booking.status) && booking.paymentStatus === 'PAID' && isBeforeCheckIn(booking);
+
 const statusConfig: Record<string, { label: string; color: string; className: string }> = {
   PENDING: { label: 'Chờ xác nhận', color: 'warning', className: 'status-pending' },
   CONFIRMED: { label: 'Đã xác nhận', color: 'success', className: 'status-confirmed' },
@@ -55,6 +72,27 @@ const MyBookingsPage: React.FC = () => {
           fetchBookings();
         } catch (err) {
           message.error(getErrorMessage(err, 'Hủy đặt phòng thất bại!'));
+        } finally {
+          setCancellingId(null);
+        }
+      },
+    });
+  };
+
+  const handleRequestCancel = (bookingId: number) => {
+    Modal.confirm({
+      title: 'Gửi yêu cầu hủy?',
+      content: 'Booking đã thanh toán. Admin sẽ xem xét yêu cầu hủy và liên hệ hoàn tiền cho bạn.',
+      okText: 'Gửi yêu cầu',
+      cancelText: 'Giữ lại',
+      okType: 'danger',
+      onOk: async () => {
+        setCancellingId(bookingId);
+        try {
+          await bookingApi.createRequest(bookingId, { type: 'CANCEL', reason: 'Khách yêu cầu hủy và hoàn tiền' });
+          message.success('Đã gửi yêu cầu hủy. Vui lòng chờ admin xử lý.');
+        } catch (err) {
+          message.error(getErrorMessage(err, 'Gửi yêu cầu hủy thất bại!'));
         } finally {
           setCancellingId(null);
         }
@@ -196,7 +234,7 @@ const MyBookingsPage: React.FC = () => {
               >
                 Xem
               </Button>
-              {booking.status === 'PENDING' && (
+              {canCancelDirectly(booking) && (
                 <Button
                   size="small"
                   danger
@@ -205,6 +243,17 @@ const MyBookingsPage: React.FC = () => {
                   onClick={() => handleCancel(bookingId)}
                 >
                   Hủy
+                </Button>
+              )}
+              {canRequestCancel(booking) && (
+                <Button
+                  size="small"
+                  danger
+                  icon={<CloseCircleOutlined />}
+                  loading={cancellingId === bookingId}
+                  onClick={() => handleRequestCancel(bookingId)}
+                >
+                  Yêu cầu hủy
                 </Button>
               )}
             </div>

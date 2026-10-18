@@ -24,6 +24,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -43,6 +44,7 @@ public class BookingService {
     private final HotelRepository hotelRepository;
     private final BookingRequestRepository bookingRequestRepository;
     private final NotificationService notificationService;
+    private final Clock clock;
 
     public BookingService(
             BookingRepository bookingRepository,
@@ -51,7 +53,8 @@ public class BookingService {
             RoomRepository roomRepository,
             BookingRoomRepository bookingRoomRepository,
             BookingRequestRepository bookingRequestRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            Clock clock) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.hotelRepository = hotelRepository;
@@ -59,6 +62,7 @@ public class BookingService {
         this.bookingRoomRepository = bookingRoomRepository;
         this.bookingRequestRepository = bookingRequestRepository;
         this.notificationService = notificationService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -92,8 +96,7 @@ public class BookingService {
         for (BookingRoomRequest roomRequest : request.getRooms()) {
             validateRoomRequest(roomRequest);
 
-            Room room = roomRepository.findById(roomRequest.getRoomId())
-                    .orElseThrow(() -> new NotFoundException("Room not found"));
+            Room room = lockRoom(roomRequest.getRoomId());
 
             validateRoomBelongsToHotel(room, hotelId);
             validateRoomAvailable(
@@ -144,6 +147,11 @@ public class BookingService {
         if (booking.getStatus() == BookingStatus.REJECTED) {
             throw new RuntimeException("Rejected booking cannot be cancelled");
         }
+        // Cancelling a paid booking means a refund, which an admin has to handle.
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new RuntimeException("Booking đã thanh toán. Vui lòng gửi yêu cầu hủy để admin xử lý hoàn tiền.");
+        }
+        ensureBeforeCheckIn(booking);
 
         booking.setStatus(BookingStatus.CANCELLED);
         Booking result = bookingRepository.save(booking);
@@ -250,6 +258,8 @@ public class BookingService {
 
         if (request.getType() == RequestType.CHANGE_DATE) {
             validateBookingDates(request.getNewCheckIn(), request.getNewCheckOut());
+        } else if (request.getType() == RequestType.CANCEL) {
+            ensureBeforeCheckIn(booking);
         }
 
         com.Nhom2.booking.entity.BookingRequest entity = new com.Nhom2.booking.entity.BookingRequest();
@@ -376,9 +386,20 @@ public class BookingService {
         if (!checkIn.isBefore(checkOut)) {
             throw new RuntimeException("Check-in date must be before check-out date");
         }
-        if (checkIn.isBefore(LocalDate.now())) {
+        if (checkIn.isBefore(LocalDate.now(clock))) {
             throw new RuntimeException("Check-in date must not be in the past");
         }
+    }
+
+    private void ensureBeforeCheckIn(Booking booking) {
+        if (!LocalDate.now(clock).isBefore(booking.getCheckInDate())) {
+            throw new RuntimeException("Không thể hủy booking từ ngày nhận phòng trở đi.");
+        }
+    }
+
+    private Room lockRoom(Long roomId) {
+        return roomRepository.findByIdForUpdate(roomId)
+                .orElseThrow(() -> new NotFoundException("Room not found"));
     }
 
     private long countNights(LocalDate checkIn, LocalDate checkOut) {
@@ -440,7 +461,7 @@ public class BookingService {
             LocalDate checkOut) {
         for (BookingRoom bookingRoom : booking.getBookingRooms()) {
             validateRoomAvailable(
-                    bookingRoom.getRoom(),
+                    lockRoom(bookingRoom.getRoom().getId()),
                     bookingRoom.getQuantity(),
                     checkIn,
                     checkOut,
