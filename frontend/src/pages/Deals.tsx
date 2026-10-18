@@ -1,5 +1,4 @@
 import React from 'react';
-import { ThunderboltOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 
@@ -14,15 +13,6 @@ const Deals: React.FC = () => {
           <div style={{ fontSize: 48, marginBottom: 12 }}>🔥</div>
           <h1 style={{ color: '#fff', fontSize: 36, fontWeight: 800, marginBottom: 8 }}>Ưu đãi & Khuyến mãi</h1>
           <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: 18 }}>Những deal cực hot không thể bỏ lỡ!</p>
-        </div>
-      </div>
-
-      {/* Banner strip */}
-      <div style={{ background: '#febb02', padding: '12px 0' }}>
-        <div className="container" style={{ textAlign: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: 15 }}>
-            <ThunderboltOutlined /> Flash Sale: Đặt ngay hôm nay — tiết kiệm thêm 10% cho mọi đặt phòng!
-          </span>
         </div>
       </div>
 
