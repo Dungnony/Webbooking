@@ -100,6 +100,15 @@ class SecurityRulesTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(delete("/rooms/1"))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(put("/rooms/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCanUpdateRooms() throws Exception {
+        mockMvc.perform(put("/rooms/1").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
     }
 
     @Test

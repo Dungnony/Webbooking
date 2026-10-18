@@ -36,6 +36,7 @@ const AdminHotels: React.FC = () => {
 
   // Modal Thêm Phòng
   const [roomModalOpen, setRoomModalOpen] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [roomForm] = Form.useForm<RoomFormValues>();
 
   // Upload Ảnh Phòng
@@ -149,17 +150,29 @@ const AdminHotels: React.FC = () => {
     }
   };
 
+  const openRoomModal = (room: Room | null) => {
+    setEditingRoom(room);
+    roomForm.resetFields();
+    roomForm.setFieldsValue(room ?? { capacity: 2, quantity: 1 });
+    setRoomModalOpen(true);
+  };
+
   const handleSaveRoom = async (values: RoomFormValues) => {
     if (currentHotelForRooms?.id === undefined) return;
     try {
-      await roomApi.create(currentHotelForRooms.id, values);
-      message.success('Thêm phòng thành công');
+      if (editingRoom?.id !== undefined) {
+        await roomApi.update(editingRoom.id, values);
+        message.success('Cập nhật phòng thành công');
+      } else {
+        await roomApi.create(currentHotelForRooms.id, values);
+        message.success('Thêm phòng thành công');
+      }
       setRoomModalOpen(false);
       invalidateCache('hotels_all');
       invalidateCache(`hotel_${currentHotelForRooms.id}`);
       reloadCurrentHotelRooms();
     } catch (error) {
-      message.error(getErrorMessage(error, 'Lỗi khi thêm phòng'));
+      message.error(getErrorMessage(error, editingRoom ? 'Lỗi khi cập nhật phòng' : 'Lỗi khi thêm phòng'));
     }
   };
 
@@ -280,7 +293,12 @@ const AdminHotels: React.FC = () => {
       render: (_: unknown, record: Room) => {
         const roomId = record.id;
         if (roomId === undefined) return null;
-        return <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteRoom(roomId)} />;
+        return (
+          <Space>
+            <Button size="small" icon={<EditOutlined />} onClick={() => openRoomModal(record)} />
+            <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteRoom(roomId)} />
+          </Space>
+        );
       }
     }
   ];
@@ -360,11 +378,7 @@ const AdminHotels: React.FC = () => {
         open={roomsDrawerOpen}
       >
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => {
-            roomForm.resetFields();
-            roomForm.setFieldsValue({ capacity: 2, quantity: 1 });
-            setRoomModalOpen(true);
-          }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoomModal(null)}>
             Thêm phòng
           </Button>
         </div>
@@ -377,9 +391,9 @@ const AdminHotels: React.FC = () => {
         />
       </Drawer>
 
-      {/* Modal Thêm Phòng */}
+      {/* Modal Thêm/Sửa Phòng */}
       <Modal
-        title="Thêm phòng mới"
+        title={editingRoom ? 'Sửa thông tin phòng' : 'Thêm phòng mới'}
         open={roomModalOpen}
         onOk={() => roomForm.submit()}
         onCancel={() => setRoomModalOpen(false)}
@@ -398,8 +412,14 @@ const AdminHotels: React.FC = () => {
             <Form.Item name="capacity" label="Sức chứa" rules={[{ required: true }]} style={{ width: 100 }}>
               <Input type="number" min={1} />
             </Form.Item>
-            <Form.Item name="quantity" label="Số lượng" rules={[{ required: true }]} style={{ width: 100 }}>
-              <Input type="number" min={1} />
+            <Form.Item
+              name="quantity"
+              label="Số lượng"
+              rules={[{ required: true }]}
+              tooltip="Đặt 0 để ngừng nhận đặt phòng mà vẫn giữ lịch sử"
+              style={{ width: 100 }}
+            >
+              <Input type="number" min={0} />
             </Form.Item>
           </div>
           <Form.Item name="description" label="Mô tả phòng">

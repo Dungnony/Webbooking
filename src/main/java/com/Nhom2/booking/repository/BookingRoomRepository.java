@@ -12,6 +12,8 @@ import java.util.Collection;
 
 public interface BookingRoomRepository extends JpaRepository<BookingRoom, Long> {
 
+    boolean existsByRoomId(Long roomId);
+
     @Query("""
             select coalesce(sum(br.quantity), 0)
             from BookingRoom br

@@ -35,6 +35,15 @@ public class RoomController {
         return roomService.getByHotel(hotelId);
     }
 
+    // sửa thông tin phòng
+    @PutMapping("/{id}")
+    public Room update(
+            @PathVariable Long id,
+            @RequestBody Room room
+    ) {
+        return roomService.update(id, room);
+    }
+
     // xoá phòng
     @DeleteMapping("/{id}")
     public String delete(

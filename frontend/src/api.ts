@@ -183,6 +183,13 @@ export const hotelApi = {
 export const roomApi = {
   getByHotel: (hotelId: number) => swaggerApi.rooms.getByHotel(hotelId, JSON_FMT),
   create: (hotelId: number, data: Room) => swaggerApi.rooms.create1(hotelId, data, JSON_FMT),
+  update: (id: number, data: Room) =>
+    unwrap(
+      swaggerApi.request<Room>({
+        path: `/rooms/${id}`, method: 'PUT', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Lỗi khi cập nhật phòng',
+    ),
   delete: (id: number) => swaggerApi.rooms.delete2(id, JSON_FMT),
 };
 
