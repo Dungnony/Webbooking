@@ -12,6 +12,8 @@ import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.enums.RequestStatus;
 import com.Nhom2.booking.enums.RequestType;
+import com.Nhom2.booking.exception.ForbiddenException;
+import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.BookingRequestRepository;
 import com.Nhom2.booking.repository.BookingRoomRepository;
@@ -70,7 +72,7 @@ public class BookingService {
         User user = getUserByUsername(username);
 
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new RuntimeException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("Hotel not found"));
 
         long nights = countNights(request.getCheckInDate(), request.getCheckOutDate());
 
@@ -91,7 +93,7 @@ public class BookingService {
             validateRoomRequest(roomRequest);
 
             Room room = roomRepository.findById(roomRequest.getRoomId())
-                    .orElseThrow(() -> new RuntimeException("Room not found"));
+                    .orElseThrow(() -> new NotFoundException("Room not found"));
 
             validateRoomBelongsToHotel(room, hotelId);
             validateRoomAvailable(
@@ -462,12 +464,12 @@ public class BookingService {
 
     private Booking getBooking(Long bookingId) {
         return bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new RuntimeException("Booking not found"));
+                .orElseThrow(() -> new NotFoundException("Booking not found"));
     }
 
     private com.Nhom2.booking.entity.BookingRequest getBookingRequest(Long requestId) {
         return bookingRequestRepository.findById(requestId)
-                .orElseThrow(() -> new RuntimeException("Booking request not found"));
+                .orElseThrow(() -> new NotFoundException("Booking request not found"));
     }
 
     private void ensureRequestPending(com.Nhom2.booking.entity.BookingRequest request) {
@@ -478,7 +480,7 @@ public class BookingService {
 
     private void validateBookingOwner(Booking booking, User user) {
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only access your own booking");
+            throw new ForbiddenException("You can only access your own booking");
         }
     }
 
@@ -491,6 +493,6 @@ public class BookingService {
 
     private User getUserByUsername(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new NotFoundException("User not found"));
     }
 }
