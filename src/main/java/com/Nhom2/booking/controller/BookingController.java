@@ -4,6 +4,10 @@ import com.Nhom2.booking.dto.BookingRequest;
 import com.Nhom2.booking.dto.CreateBookingRequestDto;
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.service.BookingService;
+import com.Nhom2.booking.service.InvoiceService;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,10 +18,13 @@ import java.util.List;
 public class BookingController {
 
     private final BookingService bookingService;
+    private final InvoiceService invoiceService;
 
     public BookingController(
-            BookingService bookingService) {
+            BookingService bookingService,
+            InvoiceService invoiceService) {
         this.bookingService = bookingService;
+        this.invoiceService = invoiceService;
     }
 
     // user đặt phòng
@@ -55,6 +62,18 @@ public class BookingController {
                 authentication.getName(),
                 bookingId,
                 request);
+    }
+
+    // tải lại hóa đơn PDF của booking đã thanh toán
+    @GetMapping("/{bookingId}/invoice")
+    public ResponseEntity<byte[]> downloadInvoice(
+            @PathVariable Long bookingId,
+            Authentication authentication) {
+        byte[] pdf = invoiceService.generateForOwner(authentication.getName(), bookingId);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + InvoiceService.fileName(bookingId))
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     @GetMapping("/{bookingId}/requests")

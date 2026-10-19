@@ -11,6 +11,7 @@ import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.enums.RequestType;
+import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.BookingRequestRepository;
 import com.Nhom2.booking.repository.BookingRoomRepository;
@@ -20,6 +21,7 @@ import com.Nhom2.booking.repository.UserRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -48,6 +50,7 @@ class BookingServiceTest {
     private RoomRepository roomRepository;
     private BookingRoomRepository bookingRoomRepository;
     private BookingRequestRepository bookingRequestRepository;
+    private ApplicationEventPublisher eventPublisher;
     private BookingService bookingService;
     private User alice;
     private Hotel hotel;
@@ -62,9 +65,10 @@ class BookingServiceTest {
         UserRepository userRepository = mock(UserRepository.class);
         HotelRepository hotelRepository = mock(HotelRepository.class);
 
+        eventPublisher = mock(ApplicationEventPublisher.class);
         bookingService = new BookingService(
                 bookingRepository, userRepository, hotelRepository, roomRepository, bookingRoomRepository,
-                bookingRequestRepository, mock(NotificationService.class),
+                bookingRequestRepository, mock(NotificationService.class), eventPublisher,
                 Clock.fixed(Instant.parse("2026-03-10T08:00:00Z"), ZoneOffset.UTC));
 
         alice = new User();
@@ -176,6 +180,18 @@ class BookingServiceTest {
         assertThatThrownBy(() -> bookingService.createBookingRequest("alice", 7L, cancelRequest))
                 .isInstanceOf(RuntimeException.class);
         verify(bookingRequestRepository, never()).save(any());
+    }
+
+    // ── invoice trigger ────────────────────────────────────────────────────────
+
+    @Test
+    void adminMarkingABookingPaidTriggersTheInvoiceEmail() {
+        Booking booking = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.UNPAID, TODAY.plusDays(5));
+        when(bookingRepository.findById(7L)).thenReturn(Optional.of(booking));
+
+        bookingService.markBookingPaid(7L);
+
+        verify(eventPublisher).publishEvent(new BookingPaidEvent(7L));
     }
 
     private Booking existingBooking(BookingStatus status, PaymentStatus paymentStatus, LocalDate checkIn) {

@@ -4,6 +4,7 @@ import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,7 +21,8 @@ class PaymentServiceWebhookAuthTest {
         paymentService = new PaymentService(
                 mock(BookingRepository.class),
                 mock(UserRepository.class),
-                mock(NotificationService.class));
+                mock(NotificationService.class),
+                mock(ApplicationEventPublisher.class));
         ReflectionTestUtils.setField(paymentService, "sepayApiKey", API_KEY);
     }
 

@@ -5,10 +5,12 @@ import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.util.Optional;
 
@@ -25,13 +27,15 @@ class PaymentServiceWebhookPaymentTest {
 
     private BookingRepository bookingRepository;
     private NotificationService notificationService;
+    private ApplicationEventPublisher eventPublisher;
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
         bookingRepository = mock(BookingRepository.class);
         notificationService = mock(NotificationService.class);
-        paymentService = new PaymentService(bookingRepository, mock(UserRepository.class), notificationService);
+        eventPublisher = mock(ApplicationEventPublisher.class);
+        paymentService = new PaymentService(bookingRepository, mock(UserRepository.class), notificationService, eventPublisher);
     }
 
     @Test
@@ -41,6 +45,16 @@ class PaymentServiceWebhookPaymentTest {
 
         assertThat(paymentService.processWebhookPayment(transfer("DH 5", 1_000_000L))).isTrue();
         assertThat(booking.getPaymentStatus()).isEqualTo(PaymentStatus.PAID);
+        // Triggers the invoice email once the transaction commits.
+        verify(eventPublisher).publishEvent(new BookingPaidEvent(5L));
+    }
+
+    @Test
+    void insufficientTransferDoesNotTriggerAnInvoice() {
+        when(bookingRepository.findById(5L)).thenReturn(Optional.of(booking(BookingStatus.PENDING)));
+
+        assertThat(paymentService.processWebhookPayment(transfer("DH 5", 10_000L))).isFalse();
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test

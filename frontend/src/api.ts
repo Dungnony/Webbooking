@@ -210,6 +210,12 @@ export const bookingApi = {
       path: `/bookings/${hotelId}`, method: 'POST', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
     }),
   getMy: () => swaggerApi.bookings.myBookings(JSON_FMT),
+  /** PDF invoice of one of the user's paid bookings. */
+  downloadInvoice: (bookingId: number) =>
+    unwrap(
+      swaggerApi.request<Blob>({ path: `/bookings/${bookingId}/invoice`, method: 'GET', secure: true, format: 'blob' }),
+      'Không thể tải hóa đơn',
+    ),
   cancel: (bookingId: number) => swaggerApi.bookings.cancelBooking(bookingId, JSON_FMT),
   createRequest: (bookingId: number, data: CreateBookingRequestDto) =>
     swaggerApi.bookings.createRequest(bookingId, data, JSON_FMT),

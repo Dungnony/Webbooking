@@ -111,6 +111,13 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- PDF invoices; fonts with Vietnamese glyphs are bundled under src/main/resources/fonts -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>2.0.3</version>
+        </dependency>
+
         <!-- Google OAuth2 Token Verification -->
         <dependency>
             <groupId>com.google.api-client</groupId>

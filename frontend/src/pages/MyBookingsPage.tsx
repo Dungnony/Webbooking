@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tabs, Button, Empty, message, Modal, Spin } from 'antd';
-import { CalendarOutlined, CloseCircleOutlined, EyeOutlined, LoadingOutlined } from '@ant-design/icons';
+import { CalendarOutlined, CloseCircleOutlined, EyeOutlined, FilePdfOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
 import { getHotelImage } from '../utils/imageUtils';
@@ -98,6 +98,20 @@ const MyBookingsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleDownloadInvoice = async (bookingId: number) => {
+    try {
+      const pdf = await bookingApi.downloadInvoice(bookingId);
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `hoa-don-${bookingId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      message.error(getErrorMessage(err, 'Không thể tải hóa đơn'));
+    }
   };
 
   const handleOpenPayment = async (bookingId: number) => {
@@ -234,6 +248,11 @@ const MyBookingsPage: React.FC = () => {
               >
                 Xem
               </Button>
+              {booking.paymentStatus === 'PAID' && (
+                <Button size="small" icon={<FilePdfOutlined />} onClick={() => handleDownloadInvoice(bookingId)}>
+                  Hóa đơn
+                </Button>
+              )}
               {canCancelDirectly(booking) && (
                 <Button
                   size="small"

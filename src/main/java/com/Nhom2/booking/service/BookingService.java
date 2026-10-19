@@ -12,6 +12,7 @@ import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.enums.RequestStatus;
 import com.Nhom2.booking.enums.RequestType;
+import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -20,6 +21,7 @@ import com.Nhom2.booking.repository.BookingRoomRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.RoomRepository;
 import com.Nhom2.booking.repository.UserRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,6 +46,7 @@ public class BookingService {
     private final HotelRepository hotelRepository;
     private final BookingRequestRepository bookingRequestRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
     private final Clock clock;
 
     public BookingService(
@@ -54,6 +57,7 @@ public class BookingService {
             BookingRoomRepository bookingRoomRepository,
             BookingRequestRepository bookingRequestRepository,
             NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher,
             Clock clock) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
@@ -62,6 +66,7 @@ public class BookingService {
         this.bookingRoomRepository = bookingRoomRepository;
         this.bookingRequestRepository = bookingRequestRepository;
         this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
 
@@ -228,6 +233,7 @@ public class BookingService {
 
         booking.setPaymentStatus(PaymentStatus.PAID);
         Booking result = bookingRepository.save(booking);
+        eventPublisher.publishEvent(new BookingPaidEvent(bookingId));
 
         notificationService.create(
                 booking.getUser(),

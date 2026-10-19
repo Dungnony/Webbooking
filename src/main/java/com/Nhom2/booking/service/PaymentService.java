@@ -5,6 +5,7 @@ import com.Nhom2.booking.dto.SepayWebhookRequest;
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -13,6 +14,7 @@ import com.Nhom2.booking.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -58,15 +60,18 @@ public class PaymentService {
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public PaymentService(
             BookingRepository bookingRepository,
             UserRepository userRepository,
-            NotificationService notificationService
+            NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.bookingRepository = bookingRepository;
         this.userRepository = userRepository;
         this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -278,6 +283,7 @@ public class PaymentService {
         // ✅ TỰ ĐỘNG XÁC NHẬN THANH TOÁN
         booking.setPaymentStatus(PaymentStatus.PAID);
         bookingRepository.save(booking);
+        eventPublisher.publishEvent(new BookingPaidEvent(bookingId));
 
         log.info("[Webhook] Booking #{} auto-confirmed PAID (received: {} VND)",
                 bookingId, receivedAmount);
