@@ -270,6 +270,29 @@ export const adminApi = {
   rejectBookingRequest: (requestId: number, response?: string) =>
     swaggerApi.admin.rejectBookingRequest(requestId, { response } as ProcessBookingRequestDto, JSON_FMT),
 
+  // Đánh giá: admin trả lời thay khách sạn
+  getReviews: (page: number, size: number, unanswered: boolean) =>
+    unwrap(
+      swaggerApi.request<ReviewPage>({
+        path: '/admin/reviews', method: 'GET', query: { page, size, unanswered }, secure: true, ...JSON_FMT,
+      }),
+      'Không thể tải danh sách đánh giá',
+    ),
+  replyReview: (reviewId: number, reply: string) =>
+    unwrap(
+      swaggerApi.request<ReviewItem>({
+        path: `/admin/reviews/${reviewId}/reply`, method: 'PUT', body: { reply }, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Gửi phản hồi thất bại',
+    ),
+  removeReviewReply: (reviewId: number) =>
+    unwrap(
+      swaggerApi.request<ReviewItem>({
+        path: `/admin/reviews/${reviewId}/reply`, method: 'DELETE', secure: true, ...JSON_FMT,
+      }),
+      'Xóa phản hồi thất bại',
+    ),
+
   // Thống kê & Báo cáo
   getOverview: () =>
     swaggerApi.request<AdminOverview>({ path: '/admin/statistics/overview', method: 'GET', secure: true, ...JSON_FMT }),
@@ -290,6 +313,11 @@ export interface ReviewItem {
   comment?: string;
   createdAt?: string;
   username?: string;
+  hotelId?: number;
+  hotelName?: string;
+  /** Answer written by an admin on behalf of the hotel. */
+  hotelReply?: string | null;
+  hotelRepliedAt?: string | null;
 }
 
 export interface ReviewPage {

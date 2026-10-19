@@ -13,6 +13,10 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     Page<Review> findByHotelIdOrderByCreatedAtDesc(Long hotelId, Pageable pageable);
 
+    Page<Review> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    Page<Review> findByHotelReplyIsNullOrderByCreatedAtDesc(Pageable pageable);
+
     boolean existsByUserIdAndHotelId(Long userId, Long hotelId);
 
     @Query("select avg(r.rating) from Review r where r.hotel.id = :hotelId")

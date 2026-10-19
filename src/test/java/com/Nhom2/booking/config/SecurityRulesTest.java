@@ -1,5 +1,6 @@
 package com.Nhom2.booking.config;
 
+import com.Nhom2.booking.controller.AdminReviewController;
 import com.Nhom2.booking.controller.AuthController;
 import com.Nhom2.booking.controller.ChatController;
 import com.Nhom2.booking.controller.HotelReviewController;
@@ -38,6 +39,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {
+        AdminReviewController.class,
         AuthController.class,
         ChatController.class,
         HotelReviewController.class,
@@ -174,6 +176,26 @@ class SecurityRulesTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"rating\":9,\"hotel\":{\"id\":1}}"))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void onlyAdminsCanListAndReplyToReviews() throws Exception {
+        mockMvc.perform(get("/admin/reviews")).andExpect(status().isForbidden());
+        mockMvc.perform(put("/admin/reviews/1/reply")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reply\":\"Cảm ơn\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void adminCanReplyToReviews() throws Exception {
+        mockMvc.perform(get("/admin/reviews")).andExpect(status().isOk());
+        mockMvc.perform(put("/admin/reviews/1/reply")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reply\":\"Cảm ơn\"}"))
+                .andExpect(status().isOk());
     }
 
     @Test

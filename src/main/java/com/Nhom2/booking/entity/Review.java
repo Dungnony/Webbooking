@@ -23,6 +23,11 @@ public class Review {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
+    @Column(columnDefinition = "TEXT")
+    private String hotelReply;
+
+    private LocalDateTime hotelRepliedAt;
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;

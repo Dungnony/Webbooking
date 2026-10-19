@@ -4,7 +4,8 @@ import {
   DashboardOutlined, 
   BookOutlined,
   BankOutlined,
-  ReconciliationOutlined
+  ReconciliationOutlined,
+  StarOutlined
 } from '@ant-design/icons';
 import Header from '../components/Header';
 
@@ -14,8 +15,9 @@ import AdminUsers from '../components/admin/AdminUsers';
 import AdminBookings from '../components/admin/AdminBookings';
 import AdminBookingRequests from '../components/admin/AdminBookingRequests';
 import AdminHotels from '../components/admin/AdminHotels';
+import AdminReviews from '../components/admin/AdminReviews';
 
-type TabKey = 'overview' | 'users' | 'hotels' | 'bookings' | 'requests';
+type TabKey = 'overview' | 'users' | 'hotels' | 'bookings' | 'requests' | 'reviews';
 
 // Access is restricted to admins by <AuthGuard requiredRole="ADMIN"> in App.tsx.
 const AdminDashboard: React.FC = () => {
@@ -33,6 +35,8 @@ const AdminDashboard: React.FC = () => {
         return <AdminBookings />;
       case 'requests':
         return <AdminBookingRequests />;
+      case 'reviews':
+        return <AdminReviews />;
       default:
         return <AdminOverview />;
     }
@@ -87,6 +91,14 @@ const AdminDashboard: React.FC = () => {
             style={{ padding: '12px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: activeTab === 'requests' ? '#e6f7ff' : 'transparent', color: activeTab === 'requests' ? '#1890ff' : '#333', borderRight: activeTab === 'requests' ? '3px solid #1890ff' : 'none' }}
           >
             <ReconciliationOutlined /> Yêu cầu Đặt phòng
+          </div>
+
+          <div
+            className={`admin-menu-item ${activeTab === 'reviews' ? 'active' : ''}`}
+            onClick={() => setActiveTab('reviews')}
+            style={{ padding: '12px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: activeTab === 'reviews' ? '#e6f7ff' : 'transparent', color: activeTab === 'reviews' ? '#1890ff' : '#333', borderRight: activeTab === 'reviews' ? '3px solid #1890ff' : 'none' }}
+          >
+            <StarOutlined /> Đánh giá
           </div>
 
         </aside>

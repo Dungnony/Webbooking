@@ -302,6 +302,17 @@ const handleSendMessage = async () => {
                         </div>
                       </div>
                       <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6 }}>{review.comment}</div>
+                      {review.hotelReply && (
+                        <div style={{ marginTop: 12, background: '#f0f5ff', borderLeft: '3px solid #006ce4', borderRadius: 4, padding: '10px 14px' }}>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#003b95', marginBottom: 4 }}>
+                            Phản hồi từ {hotel?.name || 'khách sạn'}
+                            {review.hotelRepliedAt && (
+                              <span style={{ fontWeight: 400, color: '#8c8c8c', marginLeft: 8 }}>{formatTimeAgo(review.hotelRepliedAt)}</span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: 14, color: '#333', lineHeight: 1.6 }}>{review.hotelReply}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))

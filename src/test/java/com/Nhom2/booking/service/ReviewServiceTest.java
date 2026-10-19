@@ -48,6 +48,9 @@ class ReviewServiceTest {
     @Mock
     private BookingRepository bookingRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     @InjectMocks
     private ReviewService reviewService;
 
@@ -200,6 +203,69 @@ class ReviewServiceTest {
         when(hotelRepository.existsById(99L)).thenReturn(false);
 
         assertThatThrownBy(() -> reviewService.getHotelReviews(99L, 0, 10)).isInstanceOf(NotFoundException.class);
+    }
+
+    // ── hotel reply (admin answers on behalf of the hotel) ─────────────────────
+
+    @Test
+    void adminReplyIsStoredWithTimestampAndTheReviewerIsNotified() {
+        User author = user(1L, "alice");
+        Review review = review(7, hotel(10L));
+        review.setId(3L);
+        review.setUser(author);
+        when(reviewRepository.findById(3L)).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewResponse result = reviewService.reply(3L, "  Cảm ơn bạn đã góp ý!  ");
+
+        assertThat(result.hotelReply()).isEqualTo("Cảm ơn bạn đã góp ý!");
+        assertThat(result.hotelRepliedAt()).isNotNull();
+        verify(notificationService).create(eq(author), any(), any());
+    }
+
+    @Test
+    void blankOrTooLongReplyIsRejected() {
+        Review review = review(7, hotel(10L));
+        review.setId(3L);
+        when(reviewRepository.findById(3L)).thenReturn(Optional.of(review));
+
+        assertThatThrownBy(() -> reviewService.reply(3L, "   ")).isInstanceOf(RuntimeException.class);
+        assertThatThrownBy(() -> reviewService.reply(3L, "x".repeat(ReviewService.MAX_REPLY_LENGTH + 1)))
+                .isInstanceOf(RuntimeException.class);
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void replyToUnknownReviewIsNotFound() {
+        when(reviewRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> reviewService.reply(99L, "Cảm ơn")).isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void removingAReplyClearsTextAndTimestamp() {
+        Review review = review(7, hotel(10L));
+        review.setId(3L);
+        review.setHotelReply("Old reply");
+        review.setHotelRepliedAt(java.time.LocalDateTime.now());
+        when(reviewRepository.findById(3L)).thenReturn(Optional.of(review));
+        when(reviewRepository.save(any(Review.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ReviewResponse result = reviewService.removeReply(3L);
+
+        assertThat(result.hotelReply()).isNull();
+        assertThat(result.hotelRepliedAt()).isNull();
+    }
+
+    @Test
+    void adminListCanBeLimitedToUnansweredReviews() {
+        when(reviewRepository.findByHotelReplyIsNullOrderByCreatedAtDesc(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+
+        reviewService.getReviewsForAdmin(0, 20, true);
+
+        verify(reviewRepository).findByHotelReplyIsNullOrderByCreatedAtDesc(any(Pageable.class));
+        verify(reviewRepository, never()).findAllByOrderByCreatedAtDesc(any(Pageable.class));
     }
 
     private void allowReview(User author, Hotel hotel) {

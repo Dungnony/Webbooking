@@ -18,12 +18,15 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+
 @Service
 public class ReviewService {
 
     static final int MIN_RATING = 1;
     static final int MAX_RATING = 10;
     static final int MAX_PAGE_SIZE = 50;
+    static final int MAX_REPLY_LENGTH = 2000;
 
     private static final String LOGIN_REQUIRED = "Đăng nhập để viết đánh giá.";
     private static final String ALREADY_REVIEWED = "Bạn đã đánh giá khách sạn này.";
@@ -42,21 +45,78 @@ public class ReviewService {
     @Autowired
     private BookingRepository bookingRepository;
 
+    @Autowired
+    private NotificationService notificationService;
+
     public ReviewPageResponse getHotelReviews(Long hotelId, int page, int size) {
         if (!hotelRepository.existsById(hotelId)) {
             throw new NotFoundException("Hotel not found");
         }
-        int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        PageRequest pageRequest = safePageRequest(page, size);
+        Page<Review> result = repository.findByHotelIdOrderByCreatedAtDesc(hotelId, pageRequest);
+        return toPageResponse(result, pageRequest, repository.averageRatingByHotelId(hotelId));
+    }
 
-        Page<Review> result = repository.findByHotelIdOrderByCreatedAtDesc(hotelId, PageRequest.of(safePage, safeSize));
+    /** All hotels, newest first; {@code onlyUnanswered} narrows it to reviews still waiting for a reply. */
+    public ReviewPageResponse getReviewsForAdmin(int page, int size, boolean onlyUnanswered) {
+        PageRequest pageRequest = safePageRequest(page, size);
+        Page<Review> result = onlyUnanswered
+                ? repository.findByHotelReplyIsNullOrderByCreatedAtDesc(pageRequest)
+                : repository.findAllByOrderByCreatedAtDesc(pageRequest);
+        return toPageResponse(result, pageRequest, null);
+    }
+
+    /** Admin answers on behalf of the hotel; replying again replaces the previous answer. */
+    @Transactional
+    public ReviewResponse reply(Long reviewId, String reply) {
+        Review review = getReview(reviewId);
+        String text = reply == null ? "" : reply.trim();
+        if (text.isEmpty()) {
+            throw new RuntimeException("Nội dung phản hồi không được trống");
+        }
+        if (text.length() > MAX_REPLY_LENGTH) {
+            throw new RuntimeException("Phản hồi tối đa " + MAX_REPLY_LENGTH + " ký tự");
+        }
+
+        review.setHotelReply(text);
+        review.setHotelRepliedAt(LocalDateTime.now());
+        Review saved = repository.save(review);
+
+        if (saved.getUser() != null) {
+            String hotelName = saved.getHotel() == null ? "" : " " + saved.getHotel().getName();
+            notificationService.create(
+                    saved.getUser(),
+                    "Hotel replied to your review",
+                    "Khách sạn" + hotelName + " đã phản hồi đánh giá của bạn.");
+        }
+        return ReviewResponse.from(saved);
+    }
+
+    @Transactional
+    public ReviewResponse removeReply(Long reviewId) {
+        Review review = getReview(reviewId);
+        review.setHotelReply(null);
+        review.setHotelRepliedAt(null);
+        return ReviewResponse.from(repository.save(review));
+    }
+
+    private Review getReview(Long reviewId) {
+        return repository.findById(reviewId)
+                .orElseThrow(() -> new NotFoundException("Review not found"));
+    }
+
+    private static PageRequest safePageRequest(int page, int size) {
+        return PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE));
+    }
+
+    private static ReviewPageResponse toPageResponse(Page<Review> result, PageRequest pageRequest, Double averageRating) {
         return new ReviewPageResponse(
                 result.map(ReviewResponse::from).getContent(),
-                safePage,
-                safeSize,
+                pageRequest.getPageNumber(),
+                pageRequest.getPageSize(),
                 result.getTotalElements(),
                 result.getTotalPages(),
-                repository.averageRatingByHotelId(hotelId));
+                averageRating);
     }
 
     /** {@code username} is null for an anonymous visitor. */
