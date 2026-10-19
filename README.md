@@ -66,6 +66,8 @@ npm install
 npm run dev
 ```
 
+Chat hỗ trợ khách ↔ admin dùng WebSocket (STOMP) tại `/ws`. Local: Vite proxy tự chuyển tiếp. **Trên Vercel phải đặt `VITE_WS_URL=wss://<backend>.up.railway.app/ws`**, vì rewrite của Vercel không chuyển tiếp WebSocket.
+
 Frontend gọi API qua tiền tố `/proxy`:
 
 - Khi dev, Vite proxy chuyển tiếp tới `http://localhost:8080` (xem [`vite.config.ts`](frontend/vite.config.ts)).
@@ -96,7 +98,8 @@ npm run build
 | Endpoint | Quyền |
 |---|---|
 | `/auth/**`, `GET /hotels/**` (gồm `/hotels/{id}/reviews`), `GET /rooms/**`, `/api/webhook/**` (có API key) | Công khai |
-| `/api/chat`, `/bookings/**`, `/notifications/**`, `POST /api/reviews`, `/users/me/**`, `/wishlist/**` | Đăng nhập |
+| `/api/chat`, `/api/support-chat/**`, `/bookings/**`, `/notifications/**`, `POST /api/reviews`, `/users/me/**`, `/wishlist/**` | Đăng nhập |
+| `/ws` (WebSocket) | Handshake công khai; frame STOMP `CONNECT` phải có `Authorization: Bearer <JWT>`, chỉ được subscribe `/user/queue/...` của chính mình |
 | `/admin/**`, `/users/**`, `/api/images/**`, `POST/PUT/DELETE /hotels/**`, `POST/PUT/DELETE /rooms/**` | `ADMIN` |
 
 Giới hạn chống dò mật khẩu/spam (theo tài khoản/email, lưu trong bộ nhớ): đăng nhập sai 5 lần khóa 15 phút; mỗi loại OTP tối đa 3 lần / 15 phút. Vượt giới hạn trả HTTP 429.

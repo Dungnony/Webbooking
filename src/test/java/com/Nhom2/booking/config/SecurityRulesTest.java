@@ -1,6 +1,8 @@
 package com.Nhom2.booking.config;
 
 import com.Nhom2.booking.controller.AdminReviewController;
+import com.Nhom2.booking.controller.AdminSupportChatController;
+import com.Nhom2.booking.controller.SupportChatController;
 import com.Nhom2.booking.controller.AuthController;
 import com.Nhom2.booking.controller.ChatController;
 import com.Nhom2.booking.controller.HotelReviewController;
@@ -16,6 +18,7 @@ import com.Nhom2.booking.repository.RoomRepository;
 import com.Nhom2.booking.security.JwtUtil;
 import com.Nhom2.booking.service.ImageStorageService;
 import com.Nhom2.booking.service.ReviewService;
+import com.Nhom2.booking.service.SupportChatService;
 import com.Nhom2.booking.service.RoomService;
 import com.Nhom2.booking.service.UserService;
 import com.Nhom2.booking.service.WishlistService;
@@ -40,6 +43,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = {
         AdminReviewController.class,
+        AdminSupportChatController.class,
+        SupportChatController.class,
         AuthController.class,
         ChatController.class,
         HotelReviewController.class,
@@ -69,6 +74,9 @@ class SecurityRulesTest {
 
     @MockitoBean
     private WishlistService wishlistService;
+
+    @MockitoBean
+    private SupportChatService supportChatService;
 
     @MockitoBean
     private AppConfigRepository appConfigRepository;
@@ -195,6 +203,33 @@ class SecurityRulesTest {
         mockMvc.perform(put("/admin/reviews/1/reply")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"reply\":\"Cảm ơn\"}"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void supportChatRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/support-chat/me")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "alice", roles = "USER")
+    void guestCanChatButCannotReadTheAdminInbox() throws Exception {
+        mockMvc.perform(get("/api/support-chat/me")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/support-chat/me/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Xin chào\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/admin/support-chat/rooms")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/admin/support-chat/rooms/1/messages")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "admin", roles = "ADMIN")
+    void adminCanReadAndAnswerConversations() throws Exception {
+        mockMvc.perform(get("/admin/support-chat/rooms")).andExpect(status().isOk());
+        mockMvc.perform(post("/admin/support-chat/rooms/1/messages")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\":\"Dạ còn phòng ạ\"}"))
                 .andExpect(status().isOk());
     }
 

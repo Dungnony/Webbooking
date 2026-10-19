@@ -391,6 +391,83 @@ export const wishlistApi = {
     ),
 };
 
+// ─── SUPPORT CHAT (khách ↔ admin) ─────────────────────────────
+export interface ChatMessageItem {
+  id: number;
+  roomId: number;
+  senderUsername: string;
+  fromAdmin: boolean;
+  content: string;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface SupportChatHistory {
+  /** null until the guest sends their first message */
+  roomId: number | null;
+  messages: ChatMessageItem[];
+}
+
+export interface ChatRoomSummary {
+  roomId: number;
+  username: string;
+  lastMessageAt?: string | null;
+  lastMessagePreview?: string | null;
+  unreadCount: number;
+}
+
+export const supportChatApi = {
+  getMine: () =>
+    unwrap(
+      swaggerApi.request<SupportChatHistory>({ path: '/api/support-chat/me', method: 'GET', secure: true, ...JSON_FMT }),
+      'Không thể tải cuộc trò chuyện',
+    ),
+  send: (content: string) =>
+    unwrap(
+      swaggerApi.request<ChatMessageItem>({
+        path: '/api/support-chat/me/messages', method: 'POST', body: { content }, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Gửi tin nhắn thất bại',
+    ),
+  markRead: () =>
+    unwrap(
+      swaggerApi.request<void>({ path: '/api/support-chat/me/read', method: 'POST', secure: true }),
+      'Không thể cập nhật trạng thái đã đọc',
+    ),
+  unreadCount: () =>
+    unwrap(
+      swaggerApi.request<{ count: number }>({ path: '/api/support-chat/me/unread-count', method: 'GET', secure: true, ...JSON_FMT }),
+      'Không thể tải số tin chưa đọc',
+    ),
+};
+
+export const adminSupportChatApi = {
+  rooms: () =>
+    unwrap(
+      swaggerApi.request<ChatRoomSummary[]>({ path: '/admin/support-chat/rooms', method: 'GET', secure: true, ...JSON_FMT }),
+      'Không thể tải danh sách hội thoại',
+    ),
+  messages: (roomId: number) =>
+    unwrap(
+      swaggerApi.request<ChatMessageItem[]>({
+        path: `/admin/support-chat/rooms/${roomId}/messages`, method: 'GET', secure: true, ...JSON_FMT,
+      }),
+      'Không thể tải tin nhắn',
+    ),
+  reply: (roomId: number, content: string) =>
+    unwrap(
+      swaggerApi.request<ChatMessageItem>({
+        path: `/admin/support-chat/rooms/${roomId}/messages`, method: 'POST', body: { content }, secure: true, type: ContentType.Json, ...JSON_FMT,
+      }),
+      'Gửi tin nhắn thất bại',
+    ),
+  markRead: (roomId: number) =>
+    unwrap(
+      swaggerApi.request<void>({ path: `/admin/support-chat/rooms/${roomId}/read`, method: 'POST', secure: true }),
+      'Không thể cập nhật trạng thái đã đọc',
+    ),
+};
+
 // ─── IMAGES ───────────────────────────────────────────────────
 export const imageApi = {
   uploadHotelImage: (hotelId: number, file: File) =>

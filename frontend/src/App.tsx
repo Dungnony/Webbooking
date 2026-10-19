@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Spin } from 'antd';
 import { WishlistProvider } from './context/WishlistContext';
 import AuthGuard from './components/AuthGuard';
+import SupportChatWidget from './components/SupportChatWidget';
 import './App.css';
 
 // Each page is its own chunk so the first load only downloads the page being opened.
@@ -80,6 +81,8 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        {/* On every page for logged-in guests; admins answer from the dashboard instead. */}
+        <SupportChatWidget />
       </Router>
     </WishlistProvider>
   );

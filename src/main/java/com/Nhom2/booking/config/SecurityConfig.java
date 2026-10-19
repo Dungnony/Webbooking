@@ -50,6 +50,8 @@ public class SecurityConfig {
                         ).permitAll()
                         .requestMatchers("/").permitAll()
                         .requestMatchers("/api/webhook/**").permitAll()
+                        // WebSocket handshake; the STOMP CONNECT frame is authenticated by StompAuthChannelInterceptor
+                        .requestMatchers("/ws", "/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/hotels/**", "/rooms/**").permitAll()
                         .requestMatchers("/api/images/**").hasRole("ADMIN")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
@@ -79,11 +81,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         // Cho phép các nguồn (Origins) nào được gọi tới Backend này
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:*",
-                "https://*.vercel.app",
-                "https://*.railway.app"
-        ));
+        configuration.setAllowedOriginPatterns(AllowedOrigins.PATTERNS);
 
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));

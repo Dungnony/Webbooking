@@ -5,7 +5,8 @@ import {
   BookOutlined,
   BankOutlined,
   ReconciliationOutlined,
-  StarOutlined
+  StarOutlined,
+  CustomerServiceOutlined
 } from '@ant-design/icons';
 import Header from '../components/Header';
 
@@ -16,8 +17,9 @@ import AdminBookings from '../components/admin/AdminBookings';
 import AdminBookingRequests from '../components/admin/AdminBookingRequests';
 import AdminHotels from '../components/admin/AdminHotels';
 import AdminReviews from '../components/admin/AdminReviews';
+import AdminSupportChat from '../components/admin/AdminSupportChat';
 
-type TabKey = 'overview' | 'users' | 'hotels' | 'bookings' | 'requests' | 'reviews';
+type TabKey = 'overview' | 'users' | 'hotels' | 'bookings' | 'requests' | 'reviews' | 'chat';
 
 // Access is restricted to admins by <AuthGuard requiredRole="ADMIN"> in App.tsx.
 const AdminDashboard: React.FC = () => {
@@ -37,6 +39,8 @@ const AdminDashboard: React.FC = () => {
         return <AdminBookingRequests />;
       case 'reviews':
         return <AdminReviews />;
+      case 'chat':
+        return <AdminSupportChat />;
       default:
         return <AdminOverview />;
     }
@@ -99,6 +103,14 @@ const AdminDashboard: React.FC = () => {
             style={{ padding: '12px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: activeTab === 'reviews' ? '#e6f7ff' : 'transparent', color: activeTab === 'reviews' ? '#1890ff' : '#333', borderRight: activeTab === 'reviews' ? '3px solid #1890ff' : 'none' }}
           >
             <StarOutlined /> Đánh giá
+          </div>
+
+          <div
+            className={`admin-menu-item ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => setActiveTab('chat')}
+            style={{ padding: '12px 20px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, background: activeTab === 'chat' ? '#e6f7ff' : 'transparent', color: activeTab === 'chat' ? '#1890ff' : '#333', borderRight: activeTab === 'chat' ? '3px solid #1890ff' : 'none' }}
+          >
+            <CustomerServiceOutlined /> Hỗ trợ khách hàng
           </div>
 
         </aside>
