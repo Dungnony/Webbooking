@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button, Spin, message, Divider } from 'antd';
 import { CheckCircleOutlined, CopyOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
@@ -16,6 +17,7 @@ const PAYMENT_WINDOW_MINUTES = 30;
 const PaymentPage: React.FC = () => {
   const state = useLocation().state as BookingFlowState | null;
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [qrData, setQrData] = useState<PaymentQr | null>(null);
   const [loadingQr, setLoadingQr] = useState(true);
   const [confirming, setConfirming] = useState(false);
@@ -39,10 +41,10 @@ const PaymentPage: React.FC = () => {
     paymentApi.getPaymentQr(bookingId)
       .then(data => setQrData(data))
       .catch(e => {
-        message.error('Không thể tải mã QR: ' + getErrorMessage(e, 'Lỗi không xác định'));
+        message.error(t('payment.qrLoadFailed', { reason: getErrorMessage(e, t('payment.unknownError')) }));
       })
       .finally(() => setLoadingQr(false));
-  }, [bookingId, navigate]);
+  }, [bookingId, navigate, t]);
 
   // Tự động kiểm tra thanh toán (polling 3s)
   useEffect(() => {
@@ -60,7 +62,7 @@ const PaymentPage: React.FC = () => {
         // Nếu đã thanh toán → chuyển trang xác nhận
         if (updated.paymentStatus === 'PAID') {
           clearInterval(interval);
-          message.success('Thanh toán thành công! Hệ thống đã tự động xác nhận.');
+          message.success(t('payment.paidAutomatically'));
           navigate('/booking/confirmation', { state: { ...state, booking: updated } });
         }
       } catch (e) {
@@ -69,10 +71,10 @@ const PaymentPage: React.FC = () => {
     }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [bookingId, navigate, state]);
+  }, [bookingId, navigate, state, t]);
 
   const handleCopy = (text: string, label: string) => {
-    navigator.clipboard.writeText(text).then(() => message.success(`Đã sao chép ${label}!`));
+    navigator.clipboard.writeText(text).then(() => message.success(t('payment.copied', { label })));
   };
 
   const handleConfirmPayment = async () => {
@@ -80,10 +82,10 @@ const PaymentPage: React.FC = () => {
     setConfirming(true);
     try {
       await paymentApi.confirmPayment(bookingId);
-      message.success('Đã gửi xác nhận thanh toán tới Admin!');
+      message.success(t('payment.confirmationSent'));
       navigate('/booking/confirmation', { state });
     } catch (e) {
-      message.error(getErrorMessage(e, 'Xác nhận thất bại, vui lòng thử lại!'));
+      message.error(getErrorMessage(e, t('payment.confirmFailed')));
     } finally {
       setConfirming(false);
     }
@@ -101,7 +103,7 @@ const PaymentPage: React.FC = () => {
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 24px 48px' }}>
         {/* Steps indicator */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-          {['1. Thông tin khách', '2. Thanh toán', '3. Xác nhận'].map((step, i) => (
+          {[t('booking.steps.guest'), t('booking.steps.payment'), t('booking.steps.confirmation')].map((step, i) => (
             <div key={step} style={{
               padding: '6px 16px',
               borderRadius: 20,
@@ -125,9 +127,9 @@ const PaymentPage: React.FC = () => {
           marginBottom: 20,
           borderTop: '4px solid #006ce4',
         }}>
-          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Thanh toán đặt phòng</h2>
+          <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>{t('payment.title')}</h2>
           <p style={{ color: '#595959', fontSize: 14, margin: 0 }}>
-            Quét mã QR hoặc chuyển khoản theo thông tin bên dưới để hoàn tất đặt phòng tại <strong>{hotel?.name}</strong>
+            {t('payment.intro')} <strong>{hotel?.name}</strong>
           </p>
         </div>
 
@@ -149,10 +151,10 @@ const PaymentPage: React.FC = () => {
           )}
           <div>
             <div style={{ fontWeight: 700, color: isPending ? '#003eb3' : '#135200', fontSize: 15, marginBottom: 4 }}>
-              {isPending ? '⏳ Chờ thanh toán để duyệt đặt phòng' : '✅ Đặt phòng đã được xác nhận'}
+              {isPending ? t('payment.awaitingPayment') : t('payment.bookingConfirmed')}
             </div>
             <div style={{ color: isPending ? '#0958d9' : '#237804', fontSize: 13 }}>
-              Vui lòng quét mã QR hoặc chuyển khoản theo thông tin bên dưới để hoàn tất thanh toán. Admin sẽ duyệt đặt phòng của bạn sau khi nhận được tiền.
+              {t('payment.instructions')}
             </div>
           </div>
         </div>
@@ -160,41 +162,41 @@ const PaymentPage: React.FC = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* QR Code */}
           <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24, textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>Mã QR thanh toán</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>{t('payment.qrTitle')}</div>
             {loadingQr ? (
               <div style={{ padding: '40px 0' }}>
                 <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
-                <div style={{ marginTop: 12, color: '#595959', fontSize: 13 }}>Đang tải mã QR...</div>
+                <div style={{ marginTop: 12, color: '#595959', fontSize: 13 }}>{t('payment.qrLoading')}</div>
               </div>
             ) : qrData?.qrCodeUrl ? (
               <>
                 <img
                   src={qrData.qrCodeUrl}
-                  alt="QR Code thanh toán"
+                  alt={t('payment.qrTitle')}
                   style={{ width: '100%', maxWidth: 220, borderRadius: 8, border: '1px solid #e0e0e0' }}
                 />
                 <div style={{ marginTop: 12, fontSize: 12, color: '#008234', fontWeight: 600 }}>
-                  Hỗ trợ tất cả app ngân hàng
+                  {t('payment.anyBankApp')}
                 </div>
               </>
             ) : (
-              <div style={{ padding: '20px 0', color: '#ff4d4f' }}>Không thể tải mã QR</div>
+              <div style={{ padding: '20px 0', color: '#ff4d4f' }}>{t('payment.qrUnavailable')}</div>
             )}
           </div>
 
           {/* Transfer info */}
           <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>Thông tin chuyển khoản</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>{t('payment.transferInfo')}</div>
 
             {loadingQr ? (
               <Spin size="small" />
             ) : qrData ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {[
-                  { label: 'Ngân hàng', value: qrData.bankName },
-                  { label: 'Số tài khoản', value: qrData.accountNumber, copyable: true },
-                  { label: 'Chủ tài khoản', value: qrData.accountName },
-                  { label: 'Nội dung', value: qrData.transferContent, copyable: true },
+                  { label: t('payment.bank'), value: qrData.bankName },
+                  { label: t('payment.accountNumber'), value: qrData.accountNumber, copyable: true },
+                  { label: t('payment.accountName'), value: qrData.accountName },
+                  { label: t('payment.transferContent'), value: qrData.transferContent, copyable: true },
                 ].map(({ label, value, copyable }) => (
                   <div key={label}>
                     <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 2 }}>{label}</div>
@@ -215,7 +217,7 @@ const PaymentPage: React.FC = () => {
 
                 <Divider style={{ margin: '4px 0' }} />
                 <div>
-                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 2 }}>Số tiền cần chuyển</div>
+                  <div style={{ fontSize: 11, color: '#8c8c8c', marginBottom: 2 }}>{t('payment.amount')}</div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: '#006ce4' }}>
                     {(qrData.amount || totalPrice || 0).toLocaleString('vi-VN')}₫
                   </div>
@@ -227,14 +229,14 @@ const PaymentPage: React.FC = () => {
 
         {/* Booking summary */}
         <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 20, marginTop: 16 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>Tóm tắt đặt phòng</div>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>{t('payment.summary')}</div>
           {[
-            ['Mã đặt phòng', `BK${String(booking.id).padStart(6, '0')}`],
-            ['Trạng thái', isPending ? '⏳ Chờ thanh toán' : isConfirmed ? '✅ Đã xác nhận' : booking.status],
-            ['Khách sạn', hotel?.name],
-            ['Nhận phòng', checkIn],
-            ['Trả phòng', checkOut],
-            ['Số đêm', `${Math.max(1, nights || 1)} đêm`],
+            [t('booking.bookingCode'), `BK${String(booking.id).padStart(6, '0')}`],
+            [t('payment.status'), isPending ? t('payment.statusPending') : isConfirmed ? t('payment.statusConfirmed') : booking.status],
+            [t('hotel.breadcrumbHotels'), hotel?.name],
+            [t('search.checkIn'), checkIn],
+            [t('search.checkOut'), checkOut],
+            [t('booking.nights'), t('booking.nightsValue', { count: Math.max(1, nights || 1) })],
           ].map(([label, value]) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #f5f5f5', fontSize: 13 }}>
               <span style={{ color: '#595959' }}>{label}</span>
@@ -246,7 +248,7 @@ const PaymentPage: React.FC = () => {
         {/* Notice */}
         <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: 14, marginTop: 16, fontSize: 13, color: '#0050b3', display: 'flex', alignItems: 'center', gap: 10 }}>
           <Spin indicator={<LoadingOutlined style={{ fontSize: 18 }} spin />} />
-          <span><strong>Hệ thống đang tự động kiểm tra thanh toán...</strong> Bạn hãy thực hiện chuyển khoản, đơn phòng sẽ tự động hoàn tất trong 1-3 phút. Nếu đợi lâu, bạn có thể nhấn xác nhận thủ công. Đơn chưa thanh toán sẽ tự hủy sau {PAYMENT_WINDOW_MINUTES} phút kể từ lúc đặt.</span>
+          <span><strong>{t('payment.checkingTitle')}</strong> {t('payment.checkingBody', { minutes: PAYMENT_WINDOW_MINUTES })}</span>
         </div>
 
         {/* Action buttons */}
@@ -256,7 +258,7 @@ const PaymentPage: React.FC = () => {
             style={{ flex: 1, height: 52 }}
             onClick={() => navigate('/my-bookings')}
           >
-            Thanh toán sau
+            {t('payment.payLater')}
           </Button>
           <Button
             type="primary"
@@ -266,7 +268,7 @@ const PaymentPage: React.FC = () => {
             style={{ flex: 2, height: 52, fontSize: 15, fontWeight: 700, background: '#006ce4' }}
             onClick={handleConfirmPayment}
           >
-            Xác nhận thủ công (Nếu lỗi)
+            {t('payment.manualConfirm')}
           </Button>
         </div>
       </div>

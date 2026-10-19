@@ -4,20 +4,24 @@ import { Row, Col, Input, Button, message, Divider } from 'antd';
 import { SendOutlined, StarFilled, LeftOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
-import { LOGIN_REQUIRED_REPLY } from '../components/AIAssistantWidget';
+import { useTranslation } from 'react-i18next';
+import i18n, { dateLocale } from '../i18n';
 import { hotelApi, reviewApi, chatApi, ChatMessage, HotelWithStats, ReviewEligibility, ReviewItem } from '../api';
 import { getErrorMessage } from '../utils/errors';
 import { invalidateCache, invalidateCachePrefix, reviewCacheKey } from '../utils/apiCache';
 
 
 /* ── Helper Functions ── */
+// Module-level helpers use i18n.t directly; the page re-renders on language change via useTranslation.
 const getRatingLabel = (score: number) => {
-  if (score >= 9) return 'Xuất sắc';
-  if (score >= 8) return 'Rất tốt';
-  if (score >= 7) return 'Tốt';
-  if (score >= 5) return 'Ổn';
-  return 'Trung bình';
+  if (score >= 9) return i18n.t('common.rating.exceptional');
+  if (score >= 8) return i18n.t('common.rating.veryGood');
+  if (score >= 7) return i18n.t('common.rating.good');
+  if (score >= 5) return i18n.t('common.rating.okay');
+  return i18n.t('common.rating.average');
 };
+
+const QUICK_QUESTION_KEYS = ['amenities', 'price', 'checkIn', 'directions', 'cancellation'] as const;
 
 const getRatingColor = (score: number) => {
   if (score >= 9) return '#008234';
@@ -30,11 +34,11 @@ const formatTimeAgo = (dateStr: string) => {
   const d = new Date(dateStr);
   const now = new Date();
   const diff = Math.floor((now.getTime() - d.getTime()) / 1000);
-  if (diff < 60) return 'Vừa xong';
-  if (diff < 3600) return `${Math.floor(diff / 60)} phút trước`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} giờ trước`;
-  if (diff < 2592000) return `${Math.floor(diff / 86400)} ngày trước`;
-  return d.toLocaleDateString('vi-VN');
+  if (diff < 60) return i18n.t('common.timeAgo.justNow');
+  if (diff < 3600) return i18n.t('common.timeAgo.minutes', { count: Math.floor(diff / 60) });
+  if (diff < 86400) return i18n.t('common.timeAgo.hours', { count: Math.floor(diff / 3600) });
+  if (diff < 2592000) return i18n.t('common.timeAgo.days', { count: Math.floor(diff / 86400) });
+  return d.toLocaleDateString(dateLocale());
 };
 
 interface StarRatingProps {
@@ -87,6 +91,7 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   const { id: paramsId } = useParams<{ id: string }>();
   const id = paramsId || window.location.pathname.split('/')[2];
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [hotel, setHotel] = useState<HotelWithStats | null>(null);
 
   // State đánh giá
@@ -101,10 +106,9 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   const [reviewComment, setReviewComment] = useState('');
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // State trò chuyện
-  const [messages, setMessages] = useState<{ sender: 'user' | 'bot', text: string, time: Date }[]>([
-    { sender: 'bot', text: 'Xin chào! Tôi là trợ lý ảo của khách sạn. Tôi có thể giúp gì cho bạn?', time: new Date() }
-  ]);
+  // State trò chuyện. The greeting is rendered separately so it follows the selected language.
+  const [messages, setMessages] = useState<{ sender: 'user' | 'bot', text: string, time: Date }[]>([]);
+  const [greetingTime] = useState(() => new Date());
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
@@ -132,7 +136,7 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
     try {
       await loadReviews(nextReviewPage);
     } catch (err) {
-      message.error(getErrorMessage(err, 'Không thể tải thêm đánh giá.'));
+      message.error(getErrorMessage(err, t('reviews.loadMoreFailed')));
     } finally {
       setLoadingMoreReviews(false);
     }
@@ -147,8 +151,8 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
   }, [id, fetchReviews]);
 
   const handleSubmitReview = async () => {
-    if (!reviewRating) return message.warning('Vui lòng chọn điểm đánh giá!');
-    if (!reviewComment.trim()) return message.warning('Vui lòng nhập nhận xét!');
+    if (!reviewRating) return message.warning(t('reviews.pickRating'));
+    if (!reviewComment.trim()) return message.warning(t('reviews.enterComment'));
 
     setSubmittingReview(true);
     try {
@@ -158,7 +162,7 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
         comment: reviewComment,
         hotel: { id: Number(id) },
       });
-      message.success('🎉 Đánh giá của bạn đã được gửi thành công!');
+      message.success(t('reviews.submitted'));
       setReviewRating(0);
       setReviewComment('');
       // The hotel's rating changed: drop cached totals and hotel data so other pages refetch them.
@@ -166,7 +170,7 @@ const HotelReviewAndChatPage = ({ isDrawer }: { isDrawer?: boolean }) => {
       invalidateCachePrefix('hotel');
       fetchReviews();
     } catch (e) {
-      message.error(getErrorMessage(e, 'Gửi đánh giá thất bại!'));
+      message.error(getErrorMessage(e, t('reviews.submitFailed')));
     } finally {
       setSubmittingReview(false);
     }
@@ -179,7 +183,7 @@ const handleSendMessage = async () => {
   setChatInput('');
   setMessages(prev => [...prev, { sender: 'user', text: userText, time: new Date() }]);
   if (!isLoggedIn) {
-    setMessages(prev => [...prev, { sender: 'bot', text: LOGIN_REQUIRED_REPLY, time: new Date() }]);
+    setMessages(prev => [...prev, { sender: 'bot', text: t('ai.loginRequired'), time: new Date() }]);
     return;
   }
   const newHistory: ChatMessage[] = [...chatHistory, { role: 'user', content: userText }];
@@ -195,17 +199,17 @@ const handleSendMessage = async () => {
       ratingAvg: hotel?.ratingAvg
     });
 
-    const botReply = data.reply || 'Xin lỗi, tôi không hiểu câu hỏi này.';
+    const botReply = data.reply || t('reviews.chat.fallbackReply');
 
     setMessages(prev => [...prev, { sender: 'bot', text: botReply, time: new Date() }]);
     setChatHistory(prev => [...prev, { role: 'assistant', content: botReply }]);
   } catch {
-    setMessages(prev => [...prev, { sender: 'bot', text: '⚠️ Lỗi kết nối. Vui lòng thử lại sau.', time: new Date() }]);
+    setMessages(prev => [...prev, { sender: 'bot', text: t('reviews.chat.connectionError'), time: new Date() }]);
   } finally {
     setChatLoading(false);
   }
 };
-  const hotelName = hotel?.name || 'Khách sạn';
+  const hotelName = hotel?.name || t('hotel.fallbackName');
 
   const content = (
     <div className="container" style={{ padding: isDrawer ? '0' : '24px' }}>
@@ -216,7 +220,7 @@ const handleSendMessage = async () => {
           onClick={() => navigate(`/hotels/${id}`)}
           style={{ padding: 0, marginBottom: 16, fontSize: 14, fontWeight: 600 }}
         >
-          Quay lại {hotelName}
+          {t('reviews.backTo', { name: hotelName })}
         </Button>
       )}
 
@@ -225,7 +229,7 @@ const handleSendMessage = async () => {
           <Col xs={24} lg={15}>
             <div style={{ background: '#fff', borderRadius: 8, padding: 24, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>Đánh giá của khách</h2>
+                <h2 style={{ margin: 0, fontSize: 24, fontWeight: 800 }}>{t('hotel.tabs.reviews')}</h2>
               </div>
 
               {/* Review Summary */}
@@ -236,7 +240,7 @@ const handleSendMessage = async () => {
                   </div>
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 18, color: '#1a1a1a' }}>{getRatingLabel(reviewStats.avg)}</div>
-                    <div style={{ color: '#595959', fontSize: 14 }}>Dựa trên {reviewStats.total} đánh giá</div>
+                    <div style={{ color: '#595959', fontSize: 14 }}>{t('reviews.basedOn', { count: reviewStats.total })}</div>
                   </div>
                 </div>
               )}
@@ -249,9 +253,9 @@ const handleSendMessage = async () => {
               )}
               {eligibility?.canReview && (
                 <div style={{ marginBottom: 24, border: '1px solid #e2e8f0', borderRadius: 8, padding: 20 }}>
-                  <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>✍️ Chia sẻ trải nghiệm của bạn</h3>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>{t('reviews.shareTitle')}</h3>
                   <div style={{ marginBottom: 16 }}>
-                    <div style={{ marginBottom: 8, fontWeight: 600 }}>Điểm đánh giá (1-10):</div>
+                    <div style={{ marginBottom: 8, fontWeight: 600 }}>{t('reviews.scoreLabel')}</div>
                     <StarRating
                       value={reviewRating}
                       hover={reviewHover}
@@ -262,13 +266,13 @@ const handleSendMessage = async () => {
                   </div>
                   <Input.TextArea
                     rows={3}
-                    placeholder="Nhận xét của bạn về chỗ nghỉ..."
+                    placeholder={t('reviews.commentPlaceholder')}
                     value={reviewComment}
                     onChange={(e) => setReviewComment(e.target.value)}
                     style={{ marginBottom: 16, borderRadius: 6 }}
                   />
                   <Button type="primary" onClick={handleSubmitReview} loading={submittingReview} style={{ fontWeight: 600, height: 38 }}>
-                    Gửi đánh giá
+                    {t('reviews.submit')}
                   </Button>
                 </div>
               )}
@@ -276,7 +280,7 @@ const handleSendMessage = async () => {
               <Divider />
 
               {/* Reviews List */}
-              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Tất cả đánh giá ({reviewStats.total})</h3>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>{t('reviews.allReviews', { count: reviewStats.total })}</h3>
               {reviews.length > 0 ? (
                 reviews.map((review, idx) => (
                   <div key={review.id ?? idx} style={{ padding: '20px 0', borderBottom: idx < reviews.length - 1 ? '1px solid #f0f0f0' : 'none', display: 'flex', gap: 16 }}>
@@ -289,7 +293,7 @@ const handleSendMessage = async () => {
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 15 }}>{review.username || 'Khách'}</div>
+                          <div style={{ fontWeight: 700, fontSize: 15 }}>{review.username || t('reviews.guest')}</div>
                           <div style={{ fontSize: 12, color: '#8c8c8c' }}>{review.createdAt ? formatTimeAgo(review.createdAt) : ''}</div>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -305,7 +309,7 @@ const handleSendMessage = async () => {
                       {review.hotelReply && (
                         <div style={{ marginTop: 12, background: '#f0f5ff', borderLeft: '3px solid #006ce4', borderRadius: 4, padding: '10px 14px' }}>
                           <div style={{ fontWeight: 700, fontSize: 13, color: '#003b95', marginBottom: 4 }}>
-                            Phản hồi từ {hotel?.name || 'khách sạn'}
+                            {t('reviews.replyFrom', { name: hotelName })}
                             {review.hotelRepliedAt && (
                               <span style={{ fontWeight: 400, color: '#8c8c8c', marginLeft: 8 }}>{formatTimeAgo(review.hotelRepliedAt)}</span>
                             )}
@@ -317,11 +321,11 @@ const handleSendMessage = async () => {
                   </div>
                 ))
               ) : (
-                <div style={{ textAlign: 'center', padding: '40px 0', color: '#8c8c8c' }}>Chưa có đánh giá nào.</div>
+                <div style={{ textAlign: 'center', padding: '40px 0', color: '#8c8c8c' }}>{t('reviews.empty')}</div>
               )}
               {hasMoreReviews && (
                 <div style={{ textAlign: 'center', marginTop: 16 }}>
-                  <Button onClick={handleLoadMoreReviews} loading={loadingMoreReviews}>Xem thêm đánh giá</Button>
+                  <Button onClick={handleLoadMoreReviews} loading={loadingMoreReviews}>{t('reviews.loadMore')}</Button>
                 </div>
               )}
             </div>
@@ -333,22 +337,24 @@ const handleSendMessage = async () => {
               
               {/* Chat Header */}
               <div style={{ padding: '16px 20px', borderBottom: '1px solid #f0f0f0', background: '#003b95', borderRadius: '8px 8px 0 0', color: '#fff' }}>
-                <h3 style={{ margin: 0, color: '#fff', fontSize: 16, fontWeight: 700 }}>Chat với Khách sạn</h3>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>Hỗ trợ trực tuyến / Bot AI</div>
+                <h3 style={{ margin: 0, color: '#fff', fontSize: 16, fontWeight: 700 }}>{t('reviews.chat.title')}</h3>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>{t('reviews.chat.subtitle')}</div>
               </div>
 
               {/* Chat Messages */}
               <div style={{ flex: 1, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, background: '#f9fafd' }}>
-                                  {/* Quick suggestions - chỉ hiện khi mới vào */}
-                {messages.length === 1 && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <div style={{ maxWidth: '85%', padding: '10px 14px', borderRadius: '12px 12px 12px 0', background: '#fff', color: '#1a1a1a', fontSize: 14, lineHeight: 1.5, border: '1px solid #e7e7e7' }}>
+                    {t('reviews.chat.greeting')}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 4 }}>
+                    {greetingTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                {/* Quick suggestions - chỉ hiện khi mới vào */}
+                {messages.length === 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {[
-                      '🏨 Khách sạn có những tiện nghi gì?',
-                      '💰 Giá phòng bao nhiêu?',
-                      '📅 Check-in lúc mấy giờ?',
-                      '🚗 Đi đến khách sạn thế nào?',
-                      '🔄 Chính sách huỷ phòng?',
-                    ].map(q => (
+                    {QUICK_QUESTION_KEYS.map(key => t(`reviews.chat.quick.${key}`)).map(q => (
                       <button
                         key={q}
                         onClick={() => { setChatInput(q); }}
@@ -411,7 +417,7 @@ const handleSendMessage = async () => {
               <div style={{ padding: 16, borderTop: '1px solid #f0f0f0', background: '#fff', borderRadius: '0 0 8px 8px' }}>
                 <div style={{ display: 'flex', gap: 8 }}>
             <Input
-              placeholder={chatLoading ? 'Đang trả lời...' : 'Nhập tin nhắn...'}
+              placeholder={chatLoading ? t('reviews.chat.replying') : t('reviews.chat.placeholder')}
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onPressEnter={handleSendMessage}

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import { dateLocale } from '../i18n';
 import { Tabs, Button, Empty, message, Modal, Spin } from 'antd';
 import { CalendarOutlined, CloseCircleOutlined, EyeOutlined, FilePdfOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
@@ -28,15 +30,18 @@ const canCancelDirectly = (booking: Booking) =>
 const canRequestCancel = (booking: Booking) =>
   ACTIVE_STATUSES.includes(booking.status) && booking.paymentStatus === 'PAID' && isBeforeCheckIn(booking);
 
-const statusConfig: Record<string, { label: string; color: string; className: string }> = {
-  PENDING: { label: 'Chờ xác nhận', color: 'warning', className: 'status-pending' },
-  CONFIRMED: { label: 'Đã xác nhận', color: 'success', className: 'status-confirmed' },
-  CANCELLED: { label: 'Đã hủy', color: 'error', className: 'status-cancelled' },
+type StatusLabelKey = 'myBookings.status.pending' | 'myBookings.status.confirmed' | 'myBookings.status.cancelled';
+
+const statusConfig: Record<string, { labelKey: StatusLabelKey; color: string; className: string }> = {
+  PENDING: { labelKey: 'myBookings.status.pending', color: 'warning', className: 'status-pending' },
+  CONFIRMED: { labelKey: 'myBookings.status.confirmed', color: 'success', className: 'status-confirmed' },
+  CANCELLED: { labelKey: 'myBookings.status.cancelled', color: 'error', className: 'status-cancelled' },
 };
 
 // Route is wrapped in <AuthGuard> in App.tsx.
 const MyBookingsPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
@@ -51,27 +56,27 @@ const MyBookingsPage: React.FC = () => {
     setLoading(true);
     bookingApi.getMy()
       .then(res => setBookings(res.data || []))
-      .catch(err => message.error(getErrorMessage(err, 'Không thể tải lịch sử đặt phòng!')))
+      .catch(err => message.error(getErrorMessage(err, t('myBookings.loadFailed'))))
       .finally(() => setLoading(false));
-  }, []);
+  }, [t]);
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
   const handleCancel = (bookingId: number) => {
     Modal.confirm({
-      title: 'Hủy đặt phòng?',
-      content: 'Bạn có chắc muốn hủy đặt phòng này không? Thao tác này không thể hoàn tác.',
-      okText: 'Xác nhận hủy',
-      cancelText: 'Giữ lại',
+      title: t('myBookings.cancelTitle'),
+      content: t('myBookings.cancelBody'),
+      okText: t('myBookings.cancelOk'),
+      cancelText: t('common.keep'),
       okType: 'danger',
       onOk: async () => {
         setCancellingId(bookingId);
         try {
           await bookingApi.cancel(bookingId);
-          message.success('Đã hủy đặt phòng thành công!');
+          message.success(t('myBookings.cancelled'));
           fetchBookings();
         } catch (err) {
-          message.error(getErrorMessage(err, 'Hủy đặt phòng thất bại!'));
+          message.error(getErrorMessage(err, t('myBookings.cancelFailed')));
         } finally {
           setCancellingId(null);
         }
@@ -81,18 +86,19 @@ const MyBookingsPage: React.FC = () => {
 
   const handleRequestCancel = (bookingId: number) => {
     Modal.confirm({
-      title: 'Gửi yêu cầu hủy?',
-      content: 'Booking đã thanh toán. Admin sẽ xem xét yêu cầu hủy và liên hệ hoàn tiền cho bạn.',
-      okText: 'Gửi yêu cầu',
-      cancelText: 'Giữ lại',
+      title: t('myBookings.requestCancelTitle'),
+      content: t('myBookings.requestCancelBody'),
+      okText: t('myBookings.requestCancelOk'),
+      cancelText: t('common.keep'),
       okType: 'danger',
       onOk: async () => {
         setCancellingId(bookingId);
         try {
+          // The reason is read by Vietnamese-speaking admins, so it stays in Vietnamese.
           await bookingApi.createRequest(bookingId, { type: 'CANCEL', reason: 'Khách yêu cầu hủy và hoàn tiền' });
-          message.success('Đã gửi yêu cầu hủy. Vui lòng chờ admin xử lý.');
+          message.success(t('myBookings.requestCancelSent'));
         } catch (err) {
-          message.error(getErrorMessage(err, 'Gửi yêu cầu hủy thất bại!'));
+          message.error(getErrorMessage(err, t('myBookings.requestCancelFailed')));
         } finally {
           setCancellingId(null);
         }
@@ -110,7 +116,7 @@ const MyBookingsPage: React.FC = () => {
       link.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      message.error(getErrorMessage(err, 'Không thể tải hóa đơn'));
+      message.error(getErrorMessage(err, t('myBookings.invoiceFailed')));
     }
   };
 
@@ -122,7 +128,7 @@ const MyBookingsPage: React.FC = () => {
       setPayingBookingId(bookingId);
       setPaymentModalVisible(true);
     } catch (e) {
-      message.error(getErrorMessage(e, 'Không thể tải thông tin thanh toán. Booking phải ở trạng thái Chờ xác nhận mới thanh toán được!'));
+      message.error(getErrorMessage(e, t('myBookings.paymentInfoFailed')));
     } finally {
       setPaymentLoading(false);
     }
@@ -138,7 +144,7 @@ const MyBookingsPage: React.FC = () => {
         const currentBooking = res.data?.find(b => b.id === payingBookingId);
         if (currentBooking && currentBooking.paymentStatus === 'PAID') {
           clearInterval(interval);
-          message.success('Thanh toán thành công! Hệ thống đã tự động xác nhận.');
+          message.success(t('payment.paidAutomatically'));
           setPaymentModalVisible(false);
           fetchBookings(); // Reload list
         }
@@ -148,18 +154,18 @@ const MyBookingsPage: React.FC = () => {
     }, PAYMENT_POLL_INTERVAL_MS);
 
     return () => clearInterval(interval);
-  }, [paymentModalVisible, payingBookingId, fetchBookings]);
+  }, [paymentModalVisible, payingBookingId, fetchBookings, t]);
 
   const handleConfirmPayment = async () => {
     if (!payingBookingId) return;
     setPaymentLoading(true);
     try {
       await paymentApi.confirmPayment(payingBookingId);
-      message.success('Đã gửi thông báo xác nhận thanh toán tới Admin!');
+      message.success(t('payment.confirmationSent'));
       setPaymentModalVisible(false);
       fetchBookings();
     } catch (e) {
-      message.error(getErrorMessage(e, 'Xác nhận thanh toán thất bại'));
+      message.error(getErrorMessage(e, t('payment.confirmFailed')));
     } finally {
       setPaymentLoading(false);
     }
@@ -172,8 +178,8 @@ const MyBookingsPage: React.FC = () => {
 
   const BookingCard = ({ booking }: { booking: Booking }) => {
     const config = (booking.status && statusConfig[booking.status]) || statusConfig.PENDING;
-    const checkIn = booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString('vi-VN') : '—';
-    const checkOut = booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString('vi-VN') : '—';
+    const checkIn = booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString(dateLocale()) : '—';
+    const checkOut = booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString(dateLocale()) : '—';
     const bookingId = booking.id;
     if (bookingId === undefined) return null;
 
@@ -208,13 +214,13 @@ const MyBookingsPage: React.FC = () => {
         <div className="booking-card-body">
           <div className="booking-card-info">
             <div className="booking-card-name">
-              {booking.hotel?.name || 'Khách sạn'}
+              {booking.hotel?.name || t('hotel.fallbackName')}
             </div>
             <div className="booking-card-dates">
               <CalendarOutlined /> {checkIn} → {checkOut}
             </div>
             <div style={{ marginBottom: 8 }}>
-              <span className={`status-badge ${config.className}`}>{config.label}</span>
+              <span className={`status-badge ${config.className}`}>{t(config.labelKey)}</span>
             </div>
             <div style={{ fontSize: 13, color: '#595959' }}>
               📍 {booking.hotel?.city || booking.hotel?.address || 'Việt Nam'}
@@ -227,7 +233,7 @@ const MyBookingsPage: React.FC = () => {
                 {(booking.totalPrice || 0).toLocaleString('vi-VN')}₫
               </div>
               <div style={{ fontSize: 12, color: '#595959' }}>
-                {booking.paymentStatus === 'PAID' ? '✅ Đã thanh toán' : '⏳ Thanh toán tại chỗ'}
+                {booking.paymentStatus === 'PAID' ? t('confirmation.paid') : t('myBookings.unpaid')}
               </div>
             </div>
 
@@ -238,7 +244,7 @@ const MyBookingsPage: React.FC = () => {
                   type="primary"
                   onClick={() => handleOpenPayment(bookingId)}
                 >
-                  Thanh toán (QR)
+                  {t('myBookings.payQr')}
                 </Button>
               )}
               <Button
@@ -246,11 +252,11 @@ const MyBookingsPage: React.FC = () => {
                 icon={<EyeOutlined />}
                 onClick={() => navigate(`/my-bookings/${bookingId}`)}
               >
-                Xem
+                {t('myBookings.view')}
               </Button>
               {booking.paymentStatus === 'PAID' && (
                 <Button size="small" icon={<FilePdfOutlined />} onClick={() => handleDownloadInvoice(bookingId)}>
-                  Hóa đơn
+                  {t('myBookings.invoice')}
                 </Button>
               )}
               {canCancelDirectly(booking) && (
@@ -261,7 +267,7 @@ const MyBookingsPage: React.FC = () => {
                   loading={cancellingId === bookingId}
                   onClick={() => handleCancel(bookingId)}
                 >
-                  Hủy
+                  {t('myBookings.cancel')}
                 </Button>
               )}
               {canRequestCancel(booking) && (
@@ -272,7 +278,7 @@ const MyBookingsPage: React.FC = () => {
                   loading={cancellingId === bookingId}
                   onClick={() => handleRequestCancel(bookingId)}
                 >
-                  Yêu cầu hủy
+                  {t('myBookings.requestCancel')}
                 </Button>
               )}
             </div>
@@ -293,13 +299,13 @@ const MyBookingsPage: React.FC = () => {
               className="bk-btn-back"
               onClick={() => navigate('/')}
             >
-              ← Quay lại trang chủ
+              {t('common.backToHome')}
             </button>
             <h1 style={{ color: '#fff', fontSize: 24, fontWeight: 800, marginBottom: 4 }}>
-              Đặt chỗ của tôi
+              {t('myBookings.title')}
             </h1>
             <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: 14 }}>
-              Quản lý tất cả các đặt phòng của bạn
+              {t('myBookings.subtitle')}
             </p>
           </div>
         </div>
@@ -307,10 +313,10 @@ const MyBookingsPage: React.FC = () => {
         <div style={{ background: '#f5f5f5', flex: 1 }}>
           <div className="container" style={{ padding: '24px 24px 48px' }}>
             <Tabs activeKey={activeTab} onChange={setActiveTab} style={{ marginBottom: 20 }}>
-              <Tabs.TabPane tab={`Tất cả (${bookings.length})`} key="all" />
-              <Tabs.TabPane tab={`Chờ xác nhận (${bookings.filter(b => b.status === 'PENDING').length})`} key="PENDING" />
-              <Tabs.TabPane tab={`Đã xác nhận (${bookings.filter(b => b.status === 'CONFIRMED').length})`} key="CONFIRMED" />
-              <Tabs.TabPane tab={`Đã hủy (${bookings.filter(b => b.status === 'CANCELLED').length})`} key="CANCELLED" />
+              <Tabs.TabPane tab={t('myBookings.tabAll', { count: bookings.length })} key="all" />
+              <Tabs.TabPane tab={t('myBookings.tabPending', { count: bookings.filter(b => b.status === 'PENDING').length })} key="PENDING" />
+              <Tabs.TabPane tab={t('myBookings.tabConfirmed', { count: bookings.filter(b => b.status === 'CONFIRMED').length })} key="CONFIRMED" />
+              <Tabs.TabPane tab={t('myBookings.tabCancelled', { count: bookings.filter(b => b.status === 'CANCELLED').length })} key="CANCELLED" />
             </Tabs>
 
             {loading ? (
@@ -331,15 +337,15 @@ const MyBookingsPage: React.FC = () => {
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description={
                     <div>
-                      <div style={{ fontSize: 16, fontWeight: 700 }}>Chưa có đặt phòng nào</div>
+                      <div style={{ fontSize: 16, fontWeight: 700 }}>{t('myBookings.emptyTitle')}</div>
                       <div style={{ color: '#929292', marginTop: 4 }}>
-                        {activeTab === 'all' ? 'Bạn chưa đặt phòng nào.' : 'Không có đặt phòng nào trong trạng thái này.'}
+                        {activeTab === 'all' ? t('myBookings.emptyAll') : t('myBookings.emptyFiltered')}
                       </div>
                     </div>
                   }
                 >
                   <Button type="primary" onClick={() => navigate('/')}>
-                    Tìm khách sạn ngay
+                    {t('myBookings.findHotel')}
                   </Button>
                 </Empty>
               </div>
@@ -352,7 +358,7 @@ const MyBookingsPage: React.FC = () => {
         <Footer />
 
         <Modal
-          title="Thanh toán qua QR Code"
+          title={t('myBookings.qrModalTitle')}
           open={paymentModalVisible}
           onCancel={() => setPaymentModalVisible(false)}
           footer={null}
@@ -362,16 +368,16 @@ const MyBookingsPage: React.FC = () => {
             <div style={{ textAlign: 'center' }}>
               <img src={paymentQrData.qrCodeUrl} alt="QR Code" style={{ maxWidth: '100%', maxHeight: 300, marginBottom: 16, borderRadius: 8, border: '1px solid #e0e0e0' }} />
               <div style={{ textAlign: 'left', background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 16 }}>
-                <p><strong>Ngân hàng:</strong> {paymentQrData.bankName}</p>
-                <p><strong>Số tài khoản:</strong> {paymentQrData.accountNumber}</p>
-                <p><strong>Chủ tài khoản:</strong> {paymentQrData.accountName}</p>
-                <p><strong>Số tiền:</strong> <span style={{ color: '#006ce4', fontWeight: 'bold' }}>{paymentQrData.amount?.toLocaleString('vi-VN')}₫</span></p>
-                <p><strong>Nội dung:</strong> {paymentQrData.transferContent}</p>
+                <p><strong>{t('payment.bank')}:</strong> {paymentQrData.bankName}</p>
+                <p><strong>{t('payment.accountNumber')}:</strong> {paymentQrData.accountNumber}</p>
+                <p><strong>{t('payment.accountName')}:</strong> {paymentQrData.accountName}</p>
+                <p><strong>{t('payment.amount')}:</strong> <span style={{ color: '#006ce4', fontWeight: 'bold' }}>{paymentQrData.amount?.toLocaleString('vi-VN')}₫</span></p>
+                <p><strong>{t('payment.transferContent')}:</strong> {paymentQrData.transferContent}</p>
               </div>
 
               <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: '#0050b3', display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left' }}>
                 <Spin indicator={<LoadingOutlined style={{ fontSize: 18 }} spin />} />
-                <span><strong>Hệ thống đang chờ thanh toán...</strong> Đơn phòng sẽ tự động xác nhận trong 1-3 phút sau khi bạn chuyển khoản thành công.</span>
+                <span><strong>{t('myBookings.waitingTitle')}</strong> {t('myBookings.waitingBody')}</span>
               </div>
 
               <Button 
@@ -381,7 +387,7 @@ const MyBookingsPage: React.FC = () => {
                 onClick={handleConfirmPayment}
                 loading={paymentLoading}
               >
-                Xác nhận thủ công (Nếu lỗi)
+                {t('payment.manualConfirm')}
               </Button>
             </div>
           )}

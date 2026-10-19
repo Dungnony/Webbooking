@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Row, Col, Button } from 'antd';
 import { HeartFilled, DeleteOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
@@ -11,6 +12,7 @@ import { cachedFetch, HOTEL_DETAIL_TTL } from '../utils/apiCache';
 
 const Wishlist: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { wishlist, removeWish, clearAll } = useWishlist();
   const [hotels, setHotels] = useState<HotelWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,13 +48,13 @@ const Wishlist: React.FC = () => {
               onClick={() => navigate('/')} 
               style={{ padding: 0, marginBottom: 16, color: '#006ce4', fontWeight: 600, fontSize: 15 }}
             >
-              ← Quay lại trang chủ
+              {t('common.backToHome')}
             </Button>
             <h1 style={{ fontSize: 32, fontWeight: 800, margin: '0 0 8px 0', color: '#1a1a1a' }}>
-              Danh sách yêu thích
+              {t('header.wishlist')}
             </h1>
             <p style={{ margin: 0, fontSize: 16, color: '#595959' }}>
-              {wishlist.length} khách sạn đã lưu
+              {t('wishlist.savedCount', { count: wishlist.length })}
             </p>
           </div>
 
@@ -81,19 +83,19 @@ const Wishlist: React.FC = () => {
               }}>
                 <HeartFilled style={{ fontSize: 32, color: '#e2e8f0' }} />
               </div>
-              <h2 style={{ fontSize: 24, fontWeight: 800, color: '#1a1a1a', margin: '0 0 12px 0' }}>Lưu lại để xem sau</h2>
+              <h2 style={{ fontSize: 24, fontWeight: 800, color: '#1a1a1a', margin: '0 0 12px 0' }}>{t('wishlist.emptyTitle')}</h2>
               <p style={{ color: '#595959', marginBottom: 32, fontSize: 16, maxWidth: 400 }}>
-                Lưu lại những khách sạn bạn thích để dễ dàng quyết định nơi lưu trú cho chuyến đi tiếp theo.
+                {t('wishlist.emptyBody')}
               </p>
               <Button type="primary" size="large" onClick={() => navigate('/')} style={{ fontWeight: 700, height: 48, padding: '0 32px' }}>
-                Khám phá ngay
+                {t('wishlist.explore')}
               </Button>
             </div>
           ) : (
             <>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 24 }}>
                 <Button icon={<DeleteOutlined />} danger onClick={clearAll} size="middle" style={{ borderRadius: 6, fontWeight: 500 }}>
-                  Xóa tất cả
+                  {t('wishlist.clearAll')}
                 </Button>
               </div>
 

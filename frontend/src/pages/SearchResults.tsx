@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Slider, Checkbox, Select, Empty } from 'antd';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -10,8 +11,42 @@ import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
 const { Option } = Select;
 
+// Keywords are matched against the hotels' Vietnamese descriptions, so only the labels are translated.
+const PROPERTY_TYPE_FILTERS = [
+  { labelKey: 'results.filters.holidayHome', keyword: 'nhà nghỉ mát' },
+  { labelKey: 'results.filters.homestay', keyword: 'nhà dân' },
+  { labelKey: 'results.filters.countryHouse', keyword: 'nông thôn' },
+  { labelKey: 'results.filters.apartment', keyword: 'căn hộ' },
+  { labelKey: 'results.filters.villa', keyword: 'biệt thự' },
+] as const;
+
+const POPULAR_FILTERS = [
+  { labelKey: 'results.filters.hotel', keyword: 'khách sạn', group: 'property' },
+  { labelKey: 'results.filters.breakfast', keyword: 'bữa sáng', group: 'feature' },
+  { labelKey: 'results.filters.noCreditCard', keyword: 'thẻ tín dụng', group: 'feature' },
+  { labelKey: 'results.filters.beachfront', keyword: 'biển', group: 'feature' },
+  { labelKey: 'results.filters.apartment', keyword: 'căn hộ', group: 'property' },
+  { labelKey: 'results.filters.veryGood8', subKey: 'results.filters.basedOnReviews', val: 8 },
+  { labelKey: 'results.filters.resort', keyword: 'resort', group: 'property' },
+] as const;
+
+const AMENITY_FILTERS = [
+  { labelKey: 'results.filters.pool', keyword: 'hồ bơi' },
+  { labelKey: 'results.filters.wifi', keyword: 'wifi' },
+  { labelKey: 'results.filters.airportShuttle', keyword: 'sân bay' },
+  { labelKey: 'results.filters.parking', keyword: 'đậu xe' },
+  { labelKey: 'results.filters.spa', keyword: 'spa' },
+  { labelKey: 'results.filters.gym', keyword: 'gym' },
+] as const;
+
+const POLICY_FILTERS = [
+  { labelKey: 'results.filters.freeCancellation', keyword: 'hủy' },
+  { labelKey: 'results.filters.noPrepayment', keyword: 'thanh toán trước' },
+] as const;
+
 const SearchResults: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const city = searchParams.get('city') || '';
   const checkIn = searchParams.get('checkIn') || '';
@@ -123,7 +158,7 @@ const SearchResults: React.FC = () => {
             className="bk-btn-back-blue"
             onClick={() => navigate('/')}
           >
-            ← Quay lại trang chủ
+            {t('common.backToHome')}
           </button>
           <div className="search-results">
             {/* ── FILTER SIDEBAR ── */}
@@ -160,7 +195,7 @@ const SearchResults: React.FC = () => {
                       boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                     }}
                   >
-                    📍 Xem trên bản đồ
+                    📍 {t('results.showOnMap')}
                   </button>
                 </div>
               </div>
@@ -168,34 +203,28 @@ const SearchResults: React.FC = () => {
               {/* Main Filter Card */}
               <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1a1a1a' }}>Chọn lọc theo:</h3>
+                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#1a1a1a' }}>{t('results.filterBy')}</h3>
                 </div>
 
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>Dùng các bộ lọc cũ</div>
-                  {[
-                    { label: 'Nhà nghỉ mát', keyword: 'nhà nghỉ mát' },
-                    { label: 'Chỗ nghỉ nhà dân', keyword: 'nhà dân' },
-                    { label: 'Nhà nghỉ nông thôn', keyword: 'nông thôn' },
-                    { label: 'Căn hộ', keyword: 'căn hộ' },
-                    { label: 'Biệt thự', keyword: 'biệt thự' },
-                  ].map((item, idx) => (
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>{t('results.propertyType')}</div>
+                  {PROPERTY_TYPE_FILTERS.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' }}>
                       <Checkbox 
                         checked={selectedPropertyTypes.includes(item.keyword)}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedPropertyTypes([...selectedPropertyTypes, item.keyword]);
-                          else setSelectedPropertyTypes(selectedPropertyTypes.filter(t => t !== item.keyword));
+                          else setSelectedPropertyTypes(selectedPropertyTypes.filter(k => k !== item.keyword));
                         }}
                       >
-                        <span style={{ fontSize: 14, color: '#333' }}>{item.label}</span>
+                        <span style={{ fontSize: 14, color: '#333' }}>{t(item.labelKey)}</span>
                       </Checkbox>
                     </div>
                   ))}
                 </div>
 
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: '#1a1a1a' }}>Ngân sách của bạn (mỗi đêm)</div>
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 12, color: '#1a1a1a' }}>{t('results.budget')}</div>
                   <div style={{ fontSize: 13, marginBottom: 16, color: '#333' }}>
                     VND {priceRange[0].toLocaleString('vi-VN')} - VND {priceRange[1].toLocaleString('vi-VN')}{priceRange[1] === 10000000 ? '+' : ''}
                   </div>
@@ -223,39 +252,31 @@ const SearchResults: React.FC = () => {
                 </div>
 
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>Các bộ lọc phổ biến</div>
-                  {[
-                    { label: 'Khách sạn', keyword: 'khách sạn', group: 'property' },
-                    { label: 'Bao gồm bữa sáng', keyword: 'bữa sáng', group: 'feature' },
-                    { label: 'Đặt phòng không cần thẻ tín dụng', keyword: 'thẻ tín dụng', group: 'feature' },
-                    { label: 'Giáp biển', keyword: 'biển', group: 'feature' },
-                    { label: 'Căn hộ', keyword: 'căn hộ', group: 'property' },
-                    { label: 'Rất tốt: 8 điểm trở lên', sub: 'Dựa trên đánh giá của khách', val: 8 },
-                    { label: 'Resort', keyword: 'resort', group: 'property' },
-                  ].map((item, idx) => (
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>{t('results.popularFilters')}</div>
+                  {POPULAR_FILTERS.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, alignItems: 'flex-start' }}>
-                      <Checkbox 
+                      <Checkbox
                         checked={
-                          item.val ? selectedRatings.includes(item.val) 
-                          : item.group === 'property' ? selectedPropertyTypes.includes(item.keyword!) 
-                          : selectedFeatures.includes(item.keyword!)
+                          'val' in item ? selectedRatings.includes(item.val)
+                          : item.group === 'property' ? selectedPropertyTypes.includes(item.keyword)
+                          : selectedFeatures.includes(item.keyword)
                         }
                         onChange={(e) => {
-                          if (item.val) {
+                          if ('val' in item) {
                             if (e.target.checked) setSelectedRatings([...selectedRatings, item.val]);
                             else setSelectedRatings(selectedRatings.filter(r => r !== item.val));
-                          } else if (item.keyword && item.group === 'property') {
+                          } else if (item.group === 'property') {
                             if (e.target.checked) setSelectedPropertyTypes([...selectedPropertyTypes, item.keyword]);
-                            else setSelectedPropertyTypes(selectedPropertyTypes.filter(t => t !== item.keyword));
-                          } else if (item.keyword && item.group === 'feature') {
+                            else setSelectedPropertyTypes(selectedPropertyTypes.filter(k => k !== item.keyword));
+                          } else {
                             if (e.target.checked) setSelectedFeatures([...selectedFeatures, item.keyword]);
-                            else setSelectedFeatures(selectedFeatures.filter(t => t !== item.keyword));
+                            else setSelectedFeatures(selectedFeatures.filter(k => k !== item.keyword));
                           }
                         }}
                       >
                         <div>
-                          <div style={{ fontSize: 14, color: '#333' }}>{item.label}</div>
-                          {item.sub && <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{item.sub}</div>}
+                          <div style={{ fontSize: 14, color: '#333' }}>{t(item.labelKey)}</div>
+                          {'subKey' in item && <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>{t(item.subKey)}</div>}
                         </div>
                       </Checkbox>
                     </div>
@@ -263,44 +284,34 @@ const SearchResults: React.FC = () => {
                 </div>
 
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>Tiện nghi</div>
-                  {[
-                    { label: 'Hồ bơi', keyword: 'hồ bơi' },
-                    { label: 'Wi-Fi miễn phí', keyword: 'wifi' },
-                    { label: 'Xe đưa đón sân bay', keyword: 'sân bay' },
-                    { label: 'Chỗ đậu xe', keyword: 'đậu xe' },
-                    { label: 'Trung tâm Spa & chăm sóc sức khoẻ', keyword: 'spa' },
-                    { label: 'Phòng gym', keyword: 'gym' },
-                  ].map((item, idx) => (
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>{t('results.amenities')}</div>
+                  {AMENITY_FILTERS.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' }}>
-                      <Checkbox 
+                      <Checkbox
                         checked={selectedFeatures.includes(item.keyword)}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedFeatures([...selectedFeatures, item.keyword]);
-                          else setSelectedFeatures(selectedFeatures.filter(t => t !== item.keyword));
+                          else setSelectedFeatures(selectedFeatures.filter(k => k !== item.keyword));
                         }}
                       >
-                        <span style={{ fontSize: 14, color: '#333' }}>{item.label}</span>
+                        <span style={{ fontSize: 14, color: '#333' }}>{t(item.labelKey)}</span>
                       </Checkbox>
                     </div>
                   ))}
                 </div>
 
                 <div style={{ padding: '16px' }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>Chính sách đặt phòng</div>
-                  {[
-                    { label: 'Miễn phí hủy phòng', keyword: 'hủy' },
-                    { label: 'Không cần thanh toán trước', keyword: 'thanh toán trước' },
-                  ].map((item, idx) => (
+                  <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 14, color: '#1a1a1a' }}>{t('results.bookingPolicy')}</div>
+                  {POLICY_FILTERS.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' }}>
-                      <Checkbox 
+                      <Checkbox
                         checked={selectedFeatures.includes(item.keyword)}
                         onChange={(e) => {
                           if (e.target.checked) setSelectedFeatures([...selectedFeatures, item.keyword]);
-                          else setSelectedFeatures(selectedFeatures.filter(t => t !== item.keyword));
+                          else setSelectedFeatures(selectedFeatures.filter(k => k !== item.keyword));
                         }}
                       >
-                        <span style={{ fontSize: 14, color: '#333' }}>{item.label}</span>
+                        <span style={{ fontSize: 14, color: '#333' }}>{t(item.labelKey)}</span>
                       </Checkbox>
                     </div>
                   ))}
@@ -313,11 +324,11 @@ const SearchResults: React.FC = () => {
               <div className="results-header">
                 <div>
                   <div className="results-count">
-                    {city ? `${city}: ` : ''}{filtered.length} chỗ nghỉ tìm thấy
+                    {city ? `${city}: ` : ''}{t('results.found', { count: filtered.length })}
                   </div>
                   {(checkIn && checkOut) && (
                     <div style={{ fontSize: 14, color: '#595959', marginTop: 4 }}>
-                      {checkIn} → {checkOut} · {guests} khách · {roomsStr} phòng
+                      {t('results.stayDetails', { checkIn, checkOut, guests, rooms: roomsStr })}
                     </div>
                   )}
                 </div>
@@ -326,8 +337,8 @@ const SearchResults: React.FC = () => {
                   onChange={setSortBy}
                   style={{ width: 180 }}
                 >
-                  <Option value="rating">Đánh giá cao nhất</Option>
-                  <Option value="name">Tên A → Z</Option>
+                  <Option value="rating">{t('results.sortRating')}</Option>
+                  <Option value="name">{t('results.sortName')}</Option>
                 </Select>
               </div>
 
@@ -349,8 +360,8 @@ const SearchResults: React.FC = () => {
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                       <div>
-                        <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>Không tìm thấy chỗ nghỉ nào</div>
-                        <div style={{ color: '#595959', fontSize: 15 }}>Vui lòng thử thay đổi bộ lọc hoặc tìm kiếm với địa điểm khác.</div>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a1a', marginBottom: 8 }}>{t('results.emptyTitle')}</div>
+                        <div style={{ color: '#595959', fontSize: 15 }}>{t('results.emptyHint')}</div>
                       </div>
                     }
                   />
@@ -359,7 +370,8 @@ const SearchResults: React.FC = () => {
                 filtered.map((hotel) => {
                   const price = hotel.rooms?.[0]?.pricePerNight ?? null;
                   const rating = hotel.ratingAvg ?? null;
-                  const ratingLabel = rating === null ? '' : rating >= 9 ? 'Tuyệt vời' : rating >= 8 ? 'Rất tốt' : 'Tốt';
+                  const ratingLabel = rating === null ? t('common.rating.none')
+                    : t(`common.rating.${rating >= 9 ? 'superb' : rating >= 8 ? 'veryGood' : 'good'}`);
 
                   return (
                     <div
@@ -392,33 +404,33 @@ const SearchResults: React.FC = () => {
                         <div className="hotel-result-info">
                           <div className="hotel-result-name">{hotel.name}</div>
                           <div className="hotel-result-city">{hotel.city || hotel.address || 'Hà Nội'}</div>
-                          <div className="hotel-result-desc">{hotel.description || 'Khách sạn cao cấp với đầy đủ tiện nghi, phù hợp cho cả du lịch công tác và nghỉ dưỡng.'}</div>
+                          <div className="hotel-result-desc">{hotel.description || t('results.defaultDescription')}</div>
 
                           <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 12, color: '#008234', background: '#e6f5ea', padding: '2px 8px', borderRadius: 12 }}>✓ Miễn phí hủy phòng</span>
-                            <span style={{ fontSize: 12, color: '#006ce4', background: '#e8f0fe', padding: '2px 8px', borderRadius: 12 }}>✓ Thanh toán tại khách sạn</span>
+                            <span style={{ fontSize: 12, color: '#008234', background: '#e6f5ea', padding: '2px 8px', borderRadius: 12 }}>✓ {t('results.badgeFreeCancel')}</span>
+                            <span style={{ fontSize: 12, color: '#006ce4', background: '#e8f0fe', padding: '2px 8px', borderRadius: 12 }}>✓ {t('results.badgePayAtHotel')}</span>
                           </div>
                         </div>
 
                         <div className="hotel-result-pricing">
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', marginBottom: 'auto' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', textAlign: 'right' }}>
-                              <span className="rating-word">{ratingLabel || 'Chưa đánh giá'}</span>
-                              <span className="rating-count">{hotel.reviewCount || 0} đánh giá</span>
+                              <span className="rating-word">{ratingLabel}</span>
+                              <span className="rating-count">{t('common.reviewsCount', { count: hotel.reviewCount || 0 })}</span>
                             </div>
                             <div className="hotel-card-rating-score">
                               {rating !== null ? rating.toFixed(1) : 'N/A'}
                             </div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <div className="hotel-card-price-label">Bắt đầu từ</div>
-                            <div className="hotel-card-price-new" style={{ marginBottom: 4 }}>{price !== null ? 'VND ' + price.toLocaleString('vi-VN') : 'Liên hệ'}</div>
+                            <div className="hotel-card-price-label">{t('hotelCard.startingFrom')}</div>
+                            <div className="hotel-card-price-new" style={{ marginBottom: 4 }}>{price !== null ? 'VND ' + price.toLocaleString('vi-VN') : t('hotelCard.contactForPrice')}</div>
                             <button
                               className="hotel-result-cta"
                               style={{ marginTop: 8, padding: '8px 16px', borderRadius: 4, cursor: 'pointer', background: '#006ce4', color: '#fff', border: 'none', fontWeight: 700, fontSize: 14, width: '100%' }}
                               onClick={(e) => { e.stopPropagation(); navigate(`/hotels/${hotel.id}`); }}
                             >
-                              Xem phòng trống
+                              {t('results.seeAvailability')}
                             </button>
                           </div>
                         </div>

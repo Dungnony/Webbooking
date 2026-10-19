@@ -1,5 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Button, Divider } from 'antd';
 import { CheckCircleFilled, PrinterOutlined, HomeOutlined, UnorderedListOutlined, FrownOutlined, ProfileOutlined, BankOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
@@ -8,6 +9,7 @@ import type { BookingFlowState } from '../types/bookingFlow';
 
 const BookingConfirmation: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const state = useLocation().state as BookingFlowState | null;
 
   if (!state) {
@@ -16,8 +18,8 @@ const BookingConfirmation: React.FC = () => {
         <Header />
         <div style={{ textAlign: 'center', padding: '80px 24px' }}>
           <div style={{ fontSize: 48, color: '#faad14' }}><FrownOutlined /></div>
-          <p style={{ fontSize: 16, marginTop: 12 }}>Không tìm thấy thông tin đặt phòng</p>
-          <Button type="primary" onClick={() => navigate('/')} style={{ marginTop: 16 }}>Về trang chủ</Button>
+          <p style={{ fontSize: 16, marginTop: 12 }}>{t('confirmation.notFound')}</p>
+          <Button type="primary" onClick={() => navigate('/')} style={{ marginTop: 16 }}>{t('hotel.home')}</Button>
         </div>
         <Footer />
       </div>
@@ -43,9 +45,9 @@ const BookingConfirmation: React.FC = () => {
           borderTop: '4px solid #008234',
         }}>
           <CheckCircleFilled style={{ fontSize: 56, color: '#008234', marginBottom: 16 }} />
-          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Đặt phòng thành công!</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>{t('confirmation.title')}</h1>
           <p style={{ color: '#595959', marginBottom: 16 }}>
-            Cảm ơn bạn đã đặt phòng. Chúng tôi đã gửi xác nhận đến email của bạn.
+            {t('confirmation.thanks')}
           </p>
           <div style={{
             background: '#f5f5f5',
@@ -53,7 +55,7 @@ const BookingConfirmation: React.FC = () => {
             padding: '12px 24px',
             display: 'inline-block',
           }}>
-            <span style={{ fontSize: 13, color: '#595959' }}>Mã đặt phòng: </span>
+            <span style={{ fontSize: 13, color: '#595959' }}>{t('booking.bookingCode')}: </span>
             <span style={{ fontSize: 18, fontWeight: 800, color: '#003b95', letterSpacing: 2 }}>
               BK{String(bookingId).padStart(6, '0')}
             </span>
@@ -62,7 +64,7 @@ const BookingConfirmation: React.FC = () => {
 
         {/* Booking details */}
         <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24, marginBottom: 16 }}>
-          <h3 style={{ fontWeight: 700, marginBottom: 16 }}><ProfileOutlined style={{ marginRight: 8, color: '#006ce4' }} />Chi tiết đặt phòng</h3>
+          <h3 style={{ fontWeight: 700, marginBottom: 16 }}><ProfileOutlined style={{ marginRight: 8, color: '#006ce4' }} />{t('booking.details')}</h3>
 
           <div style={{ display: 'flex', gap: 16, marginBottom: 20 }}>
             <div style={{
@@ -74,7 +76,7 @@ const BookingConfirmation: React.FC = () => {
               <BankOutlined style={{ color: '#fff' }} />
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{hotel?.name || 'Khách sạn'}</div>
+              <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 4 }}>{hotel?.name || t('hotel.fallbackName')}</div>
               <div style={{ fontSize: 13, color: '#595959' }}>{hotel?.city || hotel?.address || 'Việt Nam'}</div>
             </div>
           </div>
@@ -82,15 +84,15 @@ const BookingConfirmation: React.FC = () => {
           <Divider style={{ margin: '16px 0' }} />
 
           {[
-            ['Khách lưu trú', `${guestInfo?.firstName || ''} ${guestInfo?.lastName || ''}`],
+            [t('confirmation.guest'), `${guestInfo?.firstName || ''} ${guestInfo?.lastName || ''}`],
             ['Email', guestInfo?.email],
-            ['Điện thoại', guestInfo?.phone],
-            ['Khách sạn', hotel?.name || '—'],
-            ['Loại phòng', room?.type || room?.name || 'Phòng tiêu chuẩn'],
-            ['Ngày nhận phòng', `${checkIn} (từ 14:00)`],
-            ['Ngày trả phòng', `${checkOut} (trước 12:00)`],
-            ['Số đêm', `${Math.max(1, nights || 2)} đêm`],
-            ['Trạng thái thanh toán', booking?.paymentStatus === 'PAID' ? '✅ Đã thanh toán' : 'Chờ thanh toán'],
+            [t('booking.phone'), guestInfo?.phone],
+            [t('hotel.breadcrumbHotels'), hotel?.name || '—'],
+            [t('confirmation.roomType'), room?.type || room?.name || t('confirmation.standardRoom')],
+            [t('booking.checkInDate'), t('confirmation.checkInValue', { date: checkIn })],
+            [t('booking.checkOutDate'), t('confirmation.checkOutValue', { date: checkOut })],
+            [t('booking.nights'), t('booking.nightsValue', { count: Math.max(1, nights || 2) })],
+            [t('confirmation.paymentStatus'), booking?.paymentStatus === 'PAID' ? t('confirmation.paid') : t('payment.statusPending')],
           ].map(([label, value]) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid #f5f5f5' }}>
               <span style={{ color: '#595959', fontSize: 14 }}>{label}</span>
@@ -101,7 +103,7 @@ const BookingConfirmation: React.FC = () => {
           <Divider style={{ margin: '16px 0' }} />
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 16, fontWeight: 700 }}>Tổng chi phí</span>
+            <span style={{ fontSize: 16, fontWeight: 700 }}>{t('booking.total')}</span>
             <span style={{ fontSize: 22, fontWeight: 800, color: '#006ce4' }}>
               {(totalPrice || 0).toLocaleString('vi-VN')}₫
             </span>
@@ -110,12 +112,12 @@ const BookingConfirmation: React.FC = () => {
 
         {/* Info box */}
         <div style={{ background: '#e8f0fe', border: '1px solid #c2d5f5', borderRadius: 8, padding: 16, marginBottom: 20 }}>
-          <div style={{ fontWeight: 700, marginBottom: 8, color: '#003b95' }}><InfoCircleOutlined style={{ marginRight: 6 }} />Lưu ý quan trọng</div>
+          <div style={{ fontWeight: 700, marginBottom: 8, color: '#003b95' }}><InfoCircleOutlined style={{ marginRight: 6 }} />{t('confirmation.notesTitle')}</div>
           <ul style={{ color: '#595959', fontSize: 13, paddingLeft: 20, margin: 0 }}>
-            <li style={{ marginBottom: 6 }}>Mang theo CMND/CCCD hoặc hộ chiếu khi nhận phòng</li>
-            <li style={{ marginBottom: 6 }}>Nhận phòng từ 14:00, trả phòng trước 12:00</li>
-            <li style={{ marginBottom: 6 }}>Liên hệ khách sạn nếu cần hỗ trợ thêm</li>
-            <li>Bạn có thể hủy phòng miễn phí trước 24 giờ</li>
+            <li style={{ marginBottom: 6 }}>{t('confirmation.noteId')}</li>
+            <li style={{ marginBottom: 6 }}>{t('confirmation.noteTimes')}</li>
+            <li style={{ marginBottom: 6 }}>{t('confirmation.noteContact')}</li>
+            <li>{t('confirmation.noteCancel')}</li>
           </ul>
         </div>
 
@@ -128,7 +130,7 @@ const BookingConfirmation: React.FC = () => {
             style={{ flex: 1, height: 48, fontWeight: 700 }}
             onClick={() => navigate('/my-bookings')}
           >
-            Xem lịch sử đặt phòng
+            {t('confirmation.viewBookings')}
           </Button>
           <Button
             icon={<HomeOutlined />}
@@ -136,14 +138,14 @@ const BookingConfirmation: React.FC = () => {
             style={{ flex: 1, height: 48 }}
             onClick={() => navigate('/')}
           >
-            Về trang chủ
+            {t('hotel.home')}
           </Button>
           <Button
             icon={<PrinterOutlined />}
             size="large"
             onClick={() => window.print()}
           >
-            In xác nhận
+            {t('confirmation.print')}
           </Button>
         </div>
       </div>

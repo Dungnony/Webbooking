@@ -8,6 +8,9 @@ import type { Notification } from '../api-generated';
 import { cachedFetch, invalidateCache, PROFILE_CACHE_KEY } from '../utils/apiCache';
 import { clearSession } from '../utils/auth';
 import { getErrorMessage } from '../utils/errors';
+import { useTranslation } from 'react-i18next';
+import { dateLocale } from '../i18n';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const { Text } = Typography;
 
@@ -20,6 +23,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const token = localStorage.getItem('token');
   const username = localStorage.getItem('username');
   const isAdmin = localStorage.getItem('role') === 'ADMIN';
@@ -111,9 +115,9 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
       const profile = await userApi.uploadAvatar(file);
       setAvatarUrl(profile.avatarUrl || '');
       invalidateCache(PROFILE_CACHE_KEY);
-      message.success('Đã cập nhật ảnh đại diện');
+      message.success(t('header.avatarUpdated'));
     } catch (err) {
-      message.error(getErrorMessage(err, 'Tải ảnh đại diện thất bại'));
+      message.error(getErrorMessage(err, t('header.avatarFailed')));
     }
   };
 
@@ -122,18 +126,18 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor(diff / (1000 * 60));
-    
-    if (days === 1) return `một ngày trước`;
-    if (days > 1) return `${days} ngày trước`;
-    if (hours > 0) return `${hours} giờ trước`;
-    if (minutes > 0) return `${minutes} phút trước`;
-    return `vừa xong`;
+
+    if (days === 1) return t('common.timeAgo.oneDay');
+    if (days > 1) return t('common.timeAgo.days', { count: days });
+    if (hours > 0) return t('common.timeAgo.hours', { count: hours });
+    if (minutes > 0) return t('common.timeAgo.minutes', { count: minutes });
+    return t('common.timeAgo.justNow');
   };
 
   const notificationContent = (
     <div style={{ width: 360, maxHeight: 500, overflowY: 'auto', padding: 0 }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <b style={{ fontSize: 15, color: '#333' }}>Thông báo của tôi ({notifications.length})</b>
+        <b style={{ fontSize: 15, color: '#333' }}>{t('header.myNotifications', { count: notifications.length })}</b>
         <div style={{ display: 'flex', gap: 12, fontSize: 18, color: '#003b95' }}>
           <SyncOutlined style={{ cursor: 'pointer' }} onClick={fetchNotifications} spin={loadingNotifications} />
           <CheckOutlined 
@@ -149,7 +153,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
       {loadingNotifications && notifications.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
       ) : notifications.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>Không có thông báo nào</div>
+        <div style={{ textAlign: 'center', padding: 20, color: '#888' }}>{t('header.noNotifications')}</div>
       ) : (
         <List
           dataSource={notifications}
@@ -184,7 +188,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
                     padding: 4,
                     cursor: 'pointer'
                   }} 
-                  title="Xóa thông báo"
+                  title={t('header.deleteNotification')}
                 />
               </List.Item>
           )}
@@ -192,7 +196,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
       )}
       {notifications.length > 0 && (
         <div style={{ padding: '12px', textAlign: 'center', color: '#c00000', cursor: 'pointer', fontSize: 14 }}>
-          <DownOutlined style={{ marginRight: 4 }} /> Tải thêm
+          <DownOutlined style={{ marginRight: 4 }} /> {t('header.loadMore')}
         </div>
       )}
     </div>
@@ -205,7 +209,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
         <div
           className="bk-popover-avatar"
           onClick={() => fileInputRef.current?.click()}
-          title="Nhấn để đổi ảnh đại diện"
+          title={t('header.changeAvatar')}
         >
           {avatarUrl ? (
             <img src={avatarUrl} alt="avatar" className="bk-popover-avatar-img" />
@@ -226,17 +230,17 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
         />
       </div>
       <div style={{ borderTop: '1px solid #e7e7e7' }} />
-      <div className="bk-popover-item" onClick={() => navigate('/profile')}>Hồ sơ của tôi</div>
-      
+      <div className="bk-popover-item" onClick={() => navigate('/profile')}>{t('header.myProfile')}</div>
+
       {/* Hiện menu Admin trên mobile */}
       {isAdmin && (
         <div className="bk-popover-item mobile-only-flex" onClick={() => navigate('/admin')} style={{ fontWeight: 700, color: '#006ce4' }}>
-          Quản lý Admin
+          {t('header.adminDashboard')}
         </div>
       )}
 
       <div className="bk-popover-item bk-popover-item-danger" onClick={handleLogout}>
-        Đăng xuất
+        {t('header.logout')}
       </div>
     </div>
   );
@@ -253,12 +257,13 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
 
           {/* Right actions */}
           <div className="bk-header-actions">
+            <LanguageSwitcher />
             {token ? (
               <>
                 {/* Ẩn bớt các nút của User nếu là Admin */}
                 {!isAdmin && (
                   <>
-                    <Tooltip title="Danh sách yêu thích">
+                    <Tooltip title={t('header.wishlist')}>
                       <button className="bk-header-action-btn" onClick={() => navigate('/wishlist')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <Badge count={wishlist.length} size="small" offset={[4, -2]}>
                           <HeartOutlined style={{ color: '#fff', fontSize: 20 }} />
@@ -266,7 +271,7 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
                       </button>
                     </Tooltip>
 
-                    <Tooltip title="Lịch sử đặt phòng">
+                    <Tooltip title={t('header.myBookings')}>
                       <button className="bk-header-action-btn" onClick={() => navigate('/my-bookings')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <CarryOutOutlined style={{ color: '#fff', fontSize: 21 }} />
                       </button>
@@ -310,10 +315,10 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
             ) : (
               <>
                 <button className="bk-header-action-btn" onClick={() => navigate('/register')}>
-                  Đăng ký
+                  {t('header.register')}
                 </button>
                 <button className="bk-header-signin-btn" onClick={() => navigate('/login')}>
-                  Đăng nhập
+                  {t('header.signIn')}
                 </button>
               </>
             )}
@@ -335,7 +340,9 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
             {selectedNotification?.message}
           </p>
           <div style={{ marginTop: 24, fontSize: 13, color: '#8c8c8c', fontStyle: 'italic', textAlign: 'right' }}>
-            Nhận lúc: {selectedNotification?.createdAt ? new Date(selectedNotification.createdAt).toLocaleString('vi-VN') : ''}
+            {t('header.receivedAt', {
+              time: selectedNotification?.createdAt ? new Date(selectedNotification.createdAt).toLocaleString(dateLocale()) : '',
+            })}
           </div>
         </div>
       </Modal>

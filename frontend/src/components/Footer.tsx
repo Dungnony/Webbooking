@@ -1,12 +1,14 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+
+// City names are proper nouns and the search matches them as stored, so they are not translated.
+const APP_CITIES = ['Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng', 'Nha Trang', 'Phú Quốc', 'Đà Lạt', 'Vũng Tàu'];
+const CONTACT_EMAIL = 'duytuvvd@gmail.com';
 
 const Footer: React.FC = () => {
   const navigate = useNavigate();
-
-  const appCities = [
-    'Hà Nội', 'TP. Hồ Chí Minh', 'Đà Nẵng', 'Nha Trang', 'Phú Quốc', 'Đà Lạt', 'Vũng Tàu'
-  ];
+  const { t } = useTranslation();
 
   const handleCityClick = (city: string) => {
     navigate(`/search?city=${encodeURIComponent(city)}`);
@@ -16,9 +18,9 @@ const Footer: React.FC = () => {
     <footer className="footer-container">
       {/* Top section: Popular destinations in app */}
       <div className="footer-destinations">
-        <h2>Các điểm đến phổ biến</h2>
+        <h2>{t('footer.popularDestinations')}</h2>
         <div className="footer-city-grid">
-          {appCities.map((city) => (
+          {APP_CITIES.map((city) => (
             <a
               key={city}
               className="footer-city-link"
@@ -27,7 +29,7 @@ const Footer: React.FC = () => {
                 handleCityClick(city);
               }}
             >
-              Khách sạn {city}
+              {t('footer.hotelsIn', { city })}
             </a>
           ))}
         </div>
@@ -38,36 +40,36 @@ const Footer: React.FC = () => {
       {/* Main links columns */}
       <div className="footer-links-grid">
         <div className="footer-column">
-          <h3>Chức năng chính</h3>
+          <h3>{t('footer.mainFeatures')}</h3>
           <ul>
-            <li><a onClick={() => navigate('/')}>Trang chủ</a></li>
-            <li><a onClick={() => navigate('/search')}>Tìm kiếm khách sạn</a></li>
-            <li><a onClick={() => navigate('/deals')}>Ưu đãi hấp dẫn</a></li>
-            <li><a onClick={() => navigate('/wishlist')}>Danh sách yêu thích</a></li>
-            <li><a onClick={() => navigate('/my-bookings')}>Đặt phòng của tôi</a></li>
-            <li><a onClick={() => navigate('/profile')}>Hồ sơ cá nhân</a></li>
+            <li><a onClick={() => navigate('/')}>{t('footer.home')}</a></li>
+            <li><a onClick={() => navigate('/search')}>{t('footer.searchHotels')}</a></li>
+            <li><a onClick={() => navigate('/deals')}>{t('footer.deals')}</a></li>
+            <li><a onClick={() => navigate('/wishlist')}>{t('footer.wishlist')}</a></li>
+            <li><a onClick={() => navigate('/my-bookings')}>{t('footer.myBookings')}</a></li>
+            <li><a onClick={() => navigate('/profile')}>{t('footer.profile')}</a></li>
           </ul>
         </div>
 
         <div className="footer-column">
-          <h3>Hệ thống & Đối tác</h3>
+          <h3>{t('footer.systemAndPartners')}</h3>
           <ul>
-            <li><a onClick={() => navigate('/login')}>Đăng nhập hệ thống</a></li>
-            <li><a onClick={() => navigate('/register')}>Đăng ký tài khoản</a></li>
-            <li><a href="#">Đăng chỗ nghỉ của Quý vị</a></li>
-            <li><a href="#">Trợ giúp đối tác</a></li>
-            <li><a onClick={() => navigate('/terms')}>Điều khoản dịch vụ</a></li>
-            <li><a onClick={() => navigate('/privacy')}>Chính sách Bảo mật</a></li>
+            <li><a onClick={() => navigate('/login')}>{t('footer.signIn')}</a></li>
+            <li><a onClick={() => navigate('/register')}>{t('footer.register')}</a></li>
+            <li><a href="#">{t('footer.listProperty')}</a></li>
+            <li><a href="#">{t('footer.partnerHelp')}</a></li>
+            <li><a onClick={() => navigate('/terms')}>{t('footer.terms')}</a></li>
+            <li><a onClick={() => navigate('/privacy')}>{t('footer.privacy')}</a></li>
           </ul>
         </div>
 
         <div className="footer-column">
-          <h3>Thông tin liên hệ</h3>
+          <h3>{t('footer.contact')}</h3>
           <ul>
             <li>
-              Liên hệ với chúng tôi qua:<br />
-              <a href="mailto:duytuvvd@gmail.com" style={{ fontWeight: 'bold', marginTop: '4px', display: 'inline-block' }}>
-                duytuvvd@gmail.com
+              {t('footer.contactUs')}<br />
+              <a href={`mailto:${CONTACT_EMAIL}`} style={{ fontWeight: 'bold', marginTop: '4px', display: 'inline-block' }}>
+                {CONTACT_EMAIL}
               </a>
             </li>
           </ul>

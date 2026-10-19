@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Input, Spin, message as toast } from 'antd';
 import { CloseOutlined, CustomerServiceOutlined, SendOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { supportChatApi, ChatMessageItem } from '../api';
 import { appendUnique, connectSupportChat } from '../utils/supportChatSocket';
 import { AUTH_CHANGED_EVENT } from '../utils/auth';
 import { getErrorMessage } from '../utils/errors';
+import { dateLocale } from '../i18n';
 
 // Must match SupportChatService.MAX_MESSAGE_LENGTH on the backend.
 const MAX_MESSAGE_LENGTH = 2000;
@@ -12,10 +14,11 @@ const MAX_MESSAGE_LENGTH = 2000;
 const isGuestLoggedIn = () => !!localStorage.getItem('token') && localStorage.getItem('role') !== 'ADMIN';
 
 const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  new Date(iso).toLocaleTimeString(dateLocale(), { hour: '2-digit', minute: '2-digit' });
 
 /** Floating chat with the hotel staff for logged-in guests (bottom-left; the AI assistant is bottom-right). */
 const SupportChatWidget: React.FC = () => {
+  const { t } = useTranslation();
   const [enabled, setEnabled] = useState(isGuestLoggedIn);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -62,12 +65,12 @@ const SupportChatWidget: React.FC = () => {
     setLoading(true);
     supportChatApi.getMine()
       .then(history => setMessages(history.messages))
-      .catch(err => toast.error(getErrorMessage(err, 'Không thể tải cuộc trò chuyện')))
+      .catch(err => toast.error(getErrorMessage(err, t('supportChat.loadFailed'))))
       .finally(() => setLoading(false));
     supportChatApi.markRead()
       .then(() => setUnread(0))
       .catch(err => console.error('Failed to mark chat read', err));
-  }, [open]);
+  }, [open, t]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,7 +85,7 @@ const SupportChatWidget: React.FC = () => {
       setMessages(prev => appendUnique(prev, sent));
       setInput('');
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Gửi tin nhắn thất bại'));
+      toast.error(getErrorMessage(err, t('supportChat.sendFailed')));
     } finally {
       setSending(false);
     }
@@ -101,7 +104,7 @@ const SupportChatWidget: React.FC = () => {
             icon={open ? <CloseOutlined /> : <CustomerServiceOutlined />}
             onClick={() => setOpen(o => !o)}
             style={{ width: 56, height: 56, boxShadow: '0 4px 16px rgba(0,53,128,0.35)' }}
-            aria-label="Chat với khách sạn"
+            aria-label={t('supportChat.openLabel')}
           />
         </Badge>
       </div>
@@ -113,8 +116,8 @@ const SupportChatWidget: React.FC = () => {
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
         }}>
           <div style={{ background: '#003580', color: '#fff', padding: '12px 16px' }}>
-            <div style={{ fontWeight: 700 }}>Hỗ trợ khách hàng</div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>Nhân viên sẽ trả lời bạn sớm nhất có thể</div>
+            <div style={{ fontWeight: 700 }}>{t('supportChat.title')}</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>{t('supportChat.subtitle')}</div>
           </div>
 
           <div style={{ flex: 1, overflowY: 'auto', padding: 12, background: '#f5f7fa' }}>
@@ -122,7 +125,7 @@ const SupportChatWidget: React.FC = () => {
               <div style={{ textAlign: 'center', paddingTop: 40 }}><Spin /></div>
             ) : messages.length === 0 ? (
               <div style={{ textAlign: 'center', color: '#8c8c8c', marginTop: 40, fontSize: 13 }}>
-                Hãy gửi câu hỏi về đặt phòng, thanh toán hoặc khách sạn. Chúng tôi sẽ phản hồi tại đây.
+                {t('supportChat.empty')}
               </div>
             ) : (
               messages.map(m => (
@@ -148,7 +151,7 @@ const SupportChatWidget: React.FC = () => {
               onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
               autoSize={{ minRows: 1, maxRows: 4 }}
               maxLength={MAX_MESSAGE_LENGTH}
-              placeholder="Nhập tin nhắn..."
+              placeholder={t('supportChat.placeholder')}
             />
             <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={handleSend} />
           </div>

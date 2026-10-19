@@ -1,7 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleOAuthProvider } from '@react-oauth/google';
+import './i18n';
 import App from './App.tsx';
+import LocalizedAntd from './components/LocalizedAntd';
 import 'antd/dist/antd.css';
 import './index.css';
 
@@ -12,7 +14,9 @@ const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_C
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-      <App />
+      <LocalizedAntd>
+        <App />
+      </LocalizedAntd>
     </GoogleOAuthProvider>
   </React.StrictMode>,
 );

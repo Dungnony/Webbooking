@@ -1,24 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { chatApi, ChatMessage } from '../api';
 
 type Message = ChatMessage;
 
-export const LOGIN_REQUIRED_REPLY = '🔒 Vui lòng đăng nhập để sử dụng trợ lý AI.';
-
-const QUICK_QUESTIONS = [
-  { label: '🏨 Xem danh sách khách sạn', value: 'Website có những khách sạn nào ở Hà Nội? Liệt kê tên và địa chỉ.' },
-  { label: '💰 Giá phòng bao nhiêu?',    value: 'Giá phòng các loại tại các khách sạn là bao nhiêu? Loại nào rẻ nhất?' },
-  { label: '📅 Cách đặt phòng',          value: 'Tôi cần làm gì để đặt phòng khách sạn trên website này?' },
-  { label: '🔄 Đổi ngày / Huỷ phòng',   value: 'Tôi muốn đổi ngày hoặc huỷ đặt phòng thì làm thế nào?' },
-  { label: '💳 Thanh toán thế nào?',     value: 'Các hình thức thanh toán được hỗ trợ là gì? Có hoàn tiền không?' },
-  { label: '⭐ Phòng nào được đánh giá cao nhất?', value: 'Khách sạn nào được đánh giá cao nhất? Cho tôi xem rating.' },
-  { label: '👨‍👩‍👧 Phòng gia đình',          value: 'Có những loại phòng nào phù hợp cho gia đình đông người?' },
-  { label: '🛎️ Dịch vụ có gì?',          value: 'Các khách sạn có những dịch vụ đặc biệt gì như spa, rooftop, bar?' },
-];
-
-
+// Each quick question has a short button label and the full prompt sent to the assistant.
+const QUICK_QUESTION_KEYS = ['hotels', 'prices', 'howToBook', 'changeOrCancel', 'payment', 'topRated', 'family', 'services'] as const;
 
 const AIAssistantWidget: React.FC = () => {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -38,7 +28,7 @@ const AIAssistantWidget: React.FC = () => {
     setInput('');
     // The chat endpoint requires authentication so anonymous visitors cannot spend the AI quota.
     if (!localStorage.getItem('token')) {
-      setMessages([...updated, { role: 'assistant', content: LOGIN_REQUIRED_REPLY }]);
+      setMessages([...updated, { role: 'assistant', content: t('ai.loginRequired') }]);
       return;
     }
     setMessages(updated);
@@ -52,10 +42,10 @@ const AIAssistantWidget: React.FC = () => {
         ratingAvg: 9.5
       });
       
-      const botReply = data.reply || 'Xin lỗi, tôi không hiểu câu hỏi này.';
+      const botReply = data.reply || t('reviews.chat.fallbackReply');
       setMessages([...updated, { role: 'assistant', content: botReply }]);
     } catch {
-      setMessages([...updated, { role: 'assistant', content: '⚠️ Lỗi kết nối. Vui lòng thử lại sau.' }]);
+      setMessages([...updated, { role: 'assistant', content: t('reviews.chat.connectionError') }]);
     } finally {
       setLoading(false);
     }
@@ -191,7 +181,7 @@ const AIAssistantWidget: React.FC = () => {
       `}</style>
 
       {/* FAB */}
-    <button className="ai-fab" onClick={() => setOpen(v => !v)} title="Trợ lý AI" aria-label="Mở trợ lý AI">
+    <button className="ai-fab" onClick={() => setOpen(v => !v)} title={t('ai.name')} aria-label={t('ai.open')}>
     {open
         ? <span style={{ fontSize: 20 }}>✕</span>
         : <img src="/logo-ai.png" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
@@ -207,30 +197,30 @@ const AIAssistantWidget: React.FC = () => {
             <img src="/logo-ai.png" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
             </div>
             <div>
-              <div className="ai-hname">Trợ lý AI Booking</div>
-              <div className="ai-hstatus">🟢 Trực tuyến • Phản hồi ngay</div>
+              <div className="ai-hname">{t('ai.title')}</div>
+              <div className="ai-hstatus">{t('ai.status')}</div>
             </div>
             <div className="ai-hactions">
-              <button className="ai-ibtn" onClick={reset} title="Cuộc trò chuyện mới">↺</button>
-              <button className="ai-ibtn" onClick={() => setOpen(false)} title="Đóng">✕</button>
+              <button className="ai-ibtn" onClick={reset} title={t('ai.newChat')}>↺</button>
+              <button className="ai-ibtn" onClick={() => setOpen(false)} title={t('common.close')}>✕</button>
             </div>
           </div>
 
           <div className="ai-body">
             {messages.length === 0 && (
               <div className="ai-welcome">
-                👋 Xin chào! Mình là <b>Trợ lý AI</b> của website đặt phòng.<br />
-                Mình có thể giúp bạn tìm khách sạn, tư vấn đặt phòng, thanh toán và nhiều hơn nữa!
+                {t('ai.welcomeLine1')}<br />
+                {t('ai.welcomeLine2')}
               </div>
             )}
 
             {showQuick && (
               <div>
-                <div className="ai-qlabel">Câu hỏi thường gặp:</div>
+                <div className="ai-qlabel">{t('ai.faq')}</div>
                 <div className="ai-qgrid">
-                  {QUICK_QUESTIONS.map(q => (
-                    <button key={q.value} className="ai-qbtn" onClick={() => sendMessage(q.value)}>
-                      {q.label}
+                  {QUICK_QUESTION_KEYS.map(key => (
+                    <button key={key} className="ai-qbtn" onClick={() => sendMessage(t(`ai.quick.${key}.prompt`))}>
+                      {t(`ai.quick.${key}.label`)}
                     </button>
                   ))}
                 </div>
@@ -263,7 +253,7 @@ const AIAssistantWidget: React.FC = () => {
           <div className="ai-footer">
             <input
               className="ai-input"
-              placeholder="Nhập câu hỏi về đặt phòng..."
+              placeholder={t('ai.placeholder')}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && sendMessage(input)}
@@ -273,7 +263,7 @@ const AIAssistantWidget: React.FC = () => {
               className="ai-sendbtn"
               onClick={() => sendMessage(input)}
               disabled={loading || !input.trim()}
-              aria-label="Gửi"
+              aria-label={t('ai.send')}
             >
               ➤
             </button>

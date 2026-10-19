@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button, DatePicker, Popover } from 'antd';
 import { EnvironmentOutlined, CalendarOutlined, TeamOutlined, SearchOutlined, MinusOutlined, PlusOutlined } from '@ant-design/icons';
 import moment, { Moment } from 'moment';
+import { useTranslation } from 'react-i18next';
 
 const { RangePicker } = DatePicker;
 
@@ -20,6 +21,7 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
   initialGuests = 2,
 }) => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [city, setCity] = useState(initialCity);
   const [dateRange, setDateRange] = useState<[Moment | null, Moment | null]>(() => {
     return initialCheckIn && initialCheckOut 
@@ -30,7 +32,7 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
   const [rooms, setRooms] = useState(1);
   const [guestOpen, setGuestOpen] = useState(false);
 
-  const guestLabel = `${guests} người lớn · ${rooms} phòng`;
+  const guestLabel = t('search.guestSummary', { guests, rooms });
 
   const handleSearch = () => {
     if (!city.trim()) return;
@@ -46,8 +48,8 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
   const guestContent = (
     <div style={{ width: 260, padding: '4px 0' }}>
       {[
-        { label: 'Người lớn', sub: '18 tuổi trở lên', val: guests, set: setGuests, min: 1, max: 30 },
-        { label: 'Số phòng', sub: '', val: rooms, set: setRooms, min: 1, max: 30 },
+        { label: t('search.adults'), sub: t('search.adultsHint'), val: guests, set: setGuests, min: 1, max: 30 },
+        { label: t('search.rooms'), sub: '', val: rooms, set: setRooms, min: 1, max: 30 },
       ].map(({ label, sub, val, set, min, max }) => (
         <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f0f0f0' }}>
           <div>
@@ -74,7 +76,7 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
         </div>
       ))}
       <Button type="primary" block style={{ marginTop: 10 }} onClick={() => setGuestOpen(false)}>
-        Xong
+        {t('search.done')}
       </Button>
     </div>
   );
@@ -85,10 +87,10 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
       <div className="search-field" style={{ flex: 2 }}>
         <EnvironmentOutlined className="search-field-icon" />
         <div className="search-field-inner">
-          <div className="search-field-label">Điểm đến</div>
+          <div className="search-field-label">{t('search.destination')}</div>
           <input
             className="search-field-value"
-            placeholder="Bạn muốn đến đâu?"
+            placeholder={t('search.destinationPlaceholder')}
             value={city}
             onChange={(e) => setCity(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -100,13 +102,13 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
       <div className="search-field" style={{ flex: 2 }}>
         <CalendarOutlined className="search-field-icon" />
         <div className="search-field-inner">
-          <div className="search-field-label">Ngày nhận – trả phòng</div>
+          <div className="search-field-label">{t('search.dates')}</div>
           <RangePicker
             value={dateRange}
             onChange={(val) => setDateRange(val as [Moment | null, Moment | null])}
             format="YYYY-MM-DD"
             disabledDate={(current) => current && current < moment().startOf('day')}
-            placeholder={['Nhận phòng', 'Trả phòng']}
+            placeholder={[t('search.checkIn'), t('search.checkOut')]}
             style={{ border: 'none', boxShadow: 'none', padding: 0, background: 'transparent', width: '100%' }}
             popupStyle={{ zIndex: 1100 }}
           />
@@ -124,7 +126,7 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
         <div className="search-field" style={{ flex: 1.5, cursor: 'pointer' }}>
           <TeamOutlined className="search-field-icon" />
           <div className="search-field-inner">
-            <div className="search-field-label">Khách & Phòng</div>
+            <div className="search-field-label">{t('search.guestsAndRooms')}</div>
             <div className="search-field-value">{guestLabel}</div>
           </div>
         </div>
@@ -136,7 +138,7 @@ const SearchWidget: React.FC<SearchWidgetProps> = ({
         icon={<SearchOutlined />}
         onClick={handleSearch}
       >
-        Tìm
+        {t('search.submit')}
       </Button>
     </div>
   );

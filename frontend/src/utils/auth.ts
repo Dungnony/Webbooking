@@ -1,3 +1,5 @@
+import { LANGUAGE_STORAGE_KEY } from '../i18n';
+
 interface JwtPayload {
   sub?: string;
   role?: string;
@@ -33,6 +35,9 @@ export function saveSession(token: string, fallbackUsername: string): string {
 }
 
 export function clearSession(): void {
+  // Logging out should not reset the visitor's language choice.
+  const language = localStorage.getItem(LANGUAGE_STORAGE_KEY);
   localStorage.clear();
+  if (language) localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
   window.dispatchEvent(new Event(AUTH_CHANGED_EVENT));
 }

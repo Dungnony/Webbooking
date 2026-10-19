@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { getHotelImage } from '../utils/imageUtils';
 import type { HotelWithStats } from '../api';
 
@@ -19,12 +20,14 @@ const HotelCard: React.FC<HotelCardProps> = ({
   showPrice = true,
   estimatedPrice,
 }) => {
+  const { t } = useTranslation();
   const rating = hotel.ratingAvg ?? 0;
   // Lấy giá từ backend, không tự sinh giá
   const price = estimatedPrice ?? hotel.rooms?.[0]?.pricePerNight;
   const imgUrl = getHotelImage(hotel) || 'https://images.unsplash.com/photo-1542314831-c6a4d1409e15?auto=format&fit=crop&q=80&w=1000'; // fallback đẹp
   
-  const ratingLabel = rating >= 9 ? 'Xuất sắc' : rating >= 8.5 ? 'Tuyệt vời' : rating >= 8 ? 'Rất tốt' : rating > 0 ? 'Tốt' : 'Chưa đánh giá';
+  const ratingKey = rating >= 9 ? 'exceptional' : rating >= 8.5 ? 'superb' : rating >= 8 ? 'veryGood' : rating > 0 ? 'good' : 'none';
+  const ratingLabel = t(`common.rating.${ratingKey}`);
 
   const [imageError, setImageError] = React.useState(false);
 
@@ -60,22 +63,22 @@ const HotelCard: React.FC<HotelCardProps> = ({
       <div className="hotel-card-body">
         <div className="hotel-card-name">{hotel.name}</div>
         <div className="hotel-card-city">
-          {hotel.city || hotel.address || 'Đang cập nhật'}
+          {hotel.city || hotel.address || t('hotelCard.locationPending')}
         </div>
 
         <div className="hotel-card-rating-container">
           <div className="hotel-card-rating-score">{rating > 0 ? rating.toFixed(1) : 'N/A'}</div>
           <div className="hotel-card-rating-text">
             <span className="rating-word">{ratingLabel}</span>
-            <span className="rating-count">{hotel.reviewCount || 0} đánh giá</span>
+            <span className="rating-count">{t('common.reviewsCount', { count: hotel.reviewCount || 0 })}</span>
           </div>
         </div>
 
         {showPrice && (
           <div className="hotel-card-price-wrapper">
-            <span className="hotel-card-price-label">Bắt đầu từ</span>
+            <span className="hotel-card-price-label">{t('hotelCard.startingFrom')}</span>
             <span className="hotel-card-price-new">
-              {price ? `VND ${price.toLocaleString('vi-VN')}` : 'Liên hệ'}
+              {price ? `VND ${price.toLocaleString('vi-VN')}` : t('hotelCard.contactForPrice')}
             </span>
           </div>
         )}

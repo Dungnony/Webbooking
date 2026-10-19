@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Row, Col } from 'antd';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
@@ -14,6 +15,7 @@ import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [hotels, setHotels] = useState<HotelWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const { isInWishlist, toggleWish } = useWishlist();
@@ -33,8 +35,8 @@ const HomePage: React.FC = () => {
       {/* ── HERO (Booking.com style) ── */}
       <section className="bk-hero">
         <div className="bk-hero-inner">
-          <h1 className="bk-hero-title">Tìm chỗ nghỉ tiếp theo của bạn</h1>
-          <p className="bk-hero-subtitle">Tìm kiếm ưu đãi khách sạn, nhà nghỉ và nhiều hơn nữa...</p>
+          <h1 className="bk-hero-title">{t('home.heroTitle')}</h1>
+          <p className="bk-hero-subtitle">{t('home.heroSubtitle')}</p>
           <div className="bk-hero-search">
             <SearchWidget />
           </div>
@@ -46,10 +48,10 @@ const HomePage: React.FC = () => {
         <div className="bk-section-inner">
           <div className="bk-section-header">
             <div>
-              <h2 className="bk-section-title">Khách sạn nổi bật</h2>
-              <p className="bk-section-subtitle">Được đánh giá cao và đặt nhiều nhất tuần này</p>
+              <h2 className="bk-section-title">{t('home.featuredTitle')}</h2>
+              <p className="bk-section-subtitle">{t('home.featuredSubtitle')}</p>
             </div>
-            <button className="bk-section-link" onClick={() => navigate('/search')}>Xem tất cả →</button>
+            <button className="bk-section-link" onClick={() => navigate('/search')}>{t('home.viewAll')}</button>
           </div>
 
           {loading ? (
@@ -102,7 +104,7 @@ const HomePage: React.FC = () => {
           ) : hotels.length === 0 ? (
             <div className="bk-empty-state">
               <div style={{ fontSize: 56 }}>🏨</div>
-              <p>Chưa có khách sạn nào. Vui lòng kiểm tra backend!</p>
+              <p>{t('home.empty')}</p>
             </div>
           ) : (
             <Row gutter={[16, 20]}>
@@ -129,14 +131,14 @@ const HomePage: React.FC = () => {
       <section className="bk-why-section">
         <div className="bk-section-inner">
           <h2 className="bk-section-title" style={{ textAlign: 'center', marginBottom: 36 }}>
-            Tại sao chọn chúng tôi?
+            {t('home.whyTitle')}
           </h2>
           <Row gutter={[24, 24]}>
             {[
-              { icon: <TrophyTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: 'Giá tốt nhất đảm bảo', desc: 'Chúng tôi cam kết bạn sẽ nhận được giá tốt nhất hoặc hoàn lại tiền' },
-              { icon: <SafetyCertificateTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: 'Thanh toán an toàn', desc: 'Dữ liệu của bạn được mã hóa và bảo vệ bởi hệ thống bảo mật cao cấp' },
-              { icon: <CustomerServiceTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: 'Hỗ trợ 24/7', desc: 'Đội ngũ hỗ trợ khách hàng luôn sẵn sàng giải đáp mọi thắc mắc của bạn' },
-              { icon: <StarTwoTone twoToneColor="#febb02" style={{ fontSize: 36 }} />, title: 'Triệu đánh giá thực', desc: 'Tất cả đánh giá đều đến từ khách đã lưu trú thực sự' },
+              { icon: <TrophyTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.bestPrice'), desc: t('home.why.bestPriceDesc') },
+              { icon: <SafetyCertificateTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.securePayment'), desc: t('home.why.securePaymentDesc') },
+              { icon: <CustomerServiceTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.support'), desc: t('home.why.supportDesc') },
+              { icon: <StarTwoTone twoToneColor="#febb02" style={{ fontSize: 36 }} />, title: t('home.why.realReviews'), desc: t('home.why.realReviewsDesc') },
             ].map((item) => (
               <Col key={item.title} xs={24} sm={12} md={6}>
                 <div className="bk-why-card">

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Form, Input, DatePicker, Button, message, Row, Col } from 'antd';
 import { UserOutlined, MailOutlined, PhoneOutlined, CalendarOutlined, ProfileOutlined, BankOutlined } from '@ant-design/icons';
 import moment, { Moment } from 'moment';
@@ -19,6 +20,7 @@ interface GuestInfoLocationState {
 const GuestInfoPage: React.FC = () => {
   const { hotelId } = useParams<{ hotelId: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const location = useLocation();
   const locationState = (location.state as GuestInfoLocationState | null) || {};
   const [form] = Form.useForm<GuestInfo>();
@@ -48,18 +50,18 @@ const GuestInfoPage: React.FC = () => {
     if (hotelId) {
       hotelApi.getById(Number(hotelId))
         .then(res => setHotel(res.data))
-        .catch(err => message.error(getErrorMessage(err, 'Không thể tải thông tin khách sạn')));
+        .catch(err => message.error(getErrorMessage(err, t('booking.hotelLoadFailed'))));
     }
-  }, [hotelId, token, navigate]);
+  }, [hotelId, token, navigate, t]);
 
   const handleSubmit = async (values: GuestInfo) => {
     if (!checkIn || !checkOut) {
-      message.error('Vui lòng chọn ngày nhận và trả phòng!');
+      message.error(t('booking.pickDates'));
       return;
     }
     const roomToBook = selectedRoom;
     if (roomToBook?.id === undefined) {
-      message.error('Không tìm thấy thông tin phòng. Vui lòng quay lại trang khách sạn và thử lại!');
+      message.error(t('booking.roomMissing'));
       return;
     }
     setSubmitting(true);
@@ -82,7 +84,7 @@ const GuestInfoPage: React.FC = () => {
       };
       navigate('/booking/payment', { state: flowState });
     } catch (err) {
-      message.error(getErrorMessage(err, 'Đặt phòng thất bại. Vui lòng thử lại!'));
+      message.error(getErrorMessage(err, t('booking.createFailed')));
     } finally {
       setSubmitting(false);
     }
@@ -103,12 +105,12 @@ const GuestInfoPage: React.FC = () => {
             padding: '4px 0', marginBottom: 16,
           }}
         >
-          ← Quay lại trang khách sạn
+          {t('booking.backToHotel')}
         </button>
 
         {/* Steps indicator */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-          {['1. Thông tin khách', '2. Thanh toán', '3. Xác nhận'].map((step, i) => (
+          {[t('booking.steps.guest'), t('booking.steps.payment'), t('booking.steps.confirmation')].map((step, i) => (
             <div key={step} style={{
               padding: '6px 16px',
               borderRadius: 20,
@@ -127,40 +129,40 @@ const GuestInfoPage: React.FC = () => {
           {/* Left: Form */}
           <div>
             <div className="booking-form-card">
-              <div className="booking-form-title"><UserOutlined style={{ marginRight: 8, color: '#006ce4' }} />Thông tin khách lưu trú</div>
+              <div className="booking-form-title"><UserOutlined style={{ marginRight: 8, color: '#006ce4' }} />{t('booking.guestDetails')}</div>
               <Form form={form} layout="vertical" onFinish={handleSubmit}>
                 <Row gutter={16}>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="firstName" label="Tên" rules={[{ required: true, message: 'Nhập tên!' }]}>
-                      <Input prefix={<UserOutlined />} placeholder="Nguyễn" />
+                    <Form.Item name="firstName" label={t('booking.firstName')} rules={[{ required: true, message: t('booking.firstNameRequired') }]}>
+                      <Input prefix={<UserOutlined />} placeholder={t('booking.firstNamePlaceholder')} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12}>
-                    <Form.Item name="lastName" label="Họ" rules={[{ required: true, message: 'Nhập họ!' }]}>
-                      <Input placeholder="Văn An" />
+                    <Form.Item name="lastName" label={t('booking.lastName')} rules={[{ required: true, message: t('booking.lastNameRequired') }]}>
+                      <Input placeholder={t('booking.lastNamePlaceholder')} />
                     </Form.Item>
                   </Col>
                 </Row>
 
-                <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: 'Nhập email hợp lệ!' }]}>
+                <Form.Item name="email" label="Email" rules={[{ required: true, type: 'email', message: t('booking.emailInvalid') }]}>
                   <Input prefix={<MailOutlined />} placeholder="example@gmail.com" />
                 </Form.Item>
 
-                <Form.Item name="phone" label="Số điện thoại" rules={[{ required: true, message: 'Nhập SĐT!' }]}>
+                <Form.Item name="phone" label={t('booking.phone')} rules={[{ required: true, message: t('booking.phoneRequired') }]}>
                   <Input prefix={<PhoneOutlined />} placeholder="0912 345 678" />
                 </Form.Item>
 
-                <Form.Item name="requests" label="Yêu cầu đặc biệt (tùy chọn)">
-                  <Input.TextArea rows={3} placeholder="Ví dụ: phòng tầng cao, giường thêm cho trẻ em..." />
+                <Form.Item name="requests" label={t('booking.specialRequests')}>
+                  <Input.TextArea rows={3} placeholder={t('booking.specialRequestsPlaceholder')} />
                 </Form.Item>
               </Form>
             </div>
 
             <div className="booking-form-card">
-              <div className="booking-form-title"><CalendarOutlined style={{ marginRight: 8, color: '#006ce4' }} />Ngày lưu trú</div>
+              <div className="booking-form-title"><CalendarOutlined style={{ marginRight: 8, color: '#006ce4' }} />{t('booking.stayDates')}</div>
               <Row gutter={16}>
                 <Col xs={24} sm={12}>
-                  <div style={{ marginBottom: 8 }}>Ngày nhận phòng <span style={{ color: '#ff4d4f' }}>*</span></div>
+                  <div style={{ marginBottom: 8 }}>{t('booking.checkInDate')} <span style={{ color: '#ff4d4f' }}>*</span></div>
                   <DatePicker
                     value={checkIn}
                     onChange={(val) => {
@@ -175,7 +177,7 @@ const GuestInfoPage: React.FC = () => {
                   />
                 </Col>
                 <Col xs={24} sm={12}>
-                  <div style={{ marginBottom: 8 }}>Ngày trả phòng <span style={{ color: '#ff4d4f' }}>*</span></div>
+                  <div style={{ marginBottom: 8 }}>{t('booking.checkOutDate')} <span style={{ color: '#ff4d4f' }}>*</span></div>
                   <DatePicker
                     value={checkOut}
                     onChange={setCheckOut}
@@ -195,13 +197,13 @@ const GuestInfoPage: React.FC = () => {
               onClick={() => form.submit()}
               style={{ height: 52, fontSize: 16, fontWeight: 700, background: '#006ce4', borderColor: '#006ce4', borderRadius: 4 }}
             >
-              Xác nhận đặt phòng
+              {t('booking.confirmBooking')}
             </Button>
           </div>
 
           {/* Right: Summary */}
           <div className="booking-summary">
-            <div className="booking-summary-title"><ProfileOutlined style={{ marginRight: 8, color: '#006ce4' }} />Chi tiết đặt phòng</div>
+            <div className="booking-summary-title"><ProfileOutlined style={{ marginRight: 8, color: '#006ce4' }} />{t('booking.details')}</div>
 
             <div className="booking-summary-hotel">
               <div className="booking-summary-hotel-img">
@@ -228,7 +230,7 @@ const GuestInfoPage: React.FC = () => {
                 </div>
               </div>
               <div>
-                <div className="booking-summary-hotel-name">{hotel?.name || 'Đang tải...'}</div>
+                <div className="booking-summary-hotel-name">{hotel?.name || t('booking.loading')}</div>
                 <div style={{ fontSize: 12, color: '#595959' }}>📍 {hotel?.city || hotel?.address || 'Việt Nam'}</div>
                 <div style={{ marginTop: 4 }}>
                   <span style={{ background: '#003b95', color: '#fff', fontSize: 11, padding: '2px 6px', borderRadius: 3 }}>
@@ -239,33 +241,33 @@ const GuestInfoPage: React.FC = () => {
             </div>
 
             <div className="booking-summary-row">
-              <span className="booking-summary-label">Nhận phòng</span>
+              <span className="booking-summary-label">{t('search.checkIn')}</span>
               <span className="booking-summary-value">{checkIn?.format('DD/MM/YYYY') || '—'}</span>
             </div>
             <div className="booking-summary-row">
-              <span className="booking-summary-label">Trả phòng</span>
+              <span className="booking-summary-label">{t('search.checkOut')}</span>
               <span className="booking-summary-value">{checkOut?.format('DD/MM/YYYY') || '—'}</span>
             </div>
             <div className="booking-summary-row">
-              <span className="booking-summary-label">Số đêm</span>
-              <span className="booking-summary-value">{Math.max(1, nights)} đêm</span>
+              <span className="booking-summary-label">{t('booking.nights')}</span>
+              <span className="booking-summary-value">{t('booking.nightsValue', { count: Math.max(1, nights) })}</span>
             </div>
             <div className="booking-summary-row">
-              <span className="booking-summary-label">Giá mỗi đêm</span>
+              <span className="booking-summary-label">{t('booking.pricePerNight')}</span>
               <span className="booking-summary-value">{pricePerNight.toLocaleString('vi-VN')}₫</span>
             </div>
 
             <div className="booking-summary-total">
               <div className="booking-summary-row" style={{ margin: 0 }}>
-                <span className="booking-summary-label">Tổng cộng</span>
+                <span className="booking-summary-label">{t('booking.total')}</span>
                 <span className="booking-summary-value">{totalPrice.toLocaleString('vi-VN')}₫</span>
               </div>
             </div>
 
             <div style={{ background: '#e6f5ea', borderRadius: 6, padding: 12, marginTop: 16, fontSize: 13, color: '#008234' }}>
-              ✓ Miễn phí hủy phòng trước 24 giờ<br />
-              ✓ Không mất phí đặt phòng<br />
-              ✓ Thanh toán tại khách sạn
+              ✓ {t('booking.perkCancel')}<br />
+              ✓ {t('booking.perkNoFee')}<br />
+              ✓ {t('booking.perkPayment')}
             </div>
           </div>
         </div>
