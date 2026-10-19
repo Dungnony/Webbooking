@@ -4,6 +4,8 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+
 /** Resolves message codes in the language of the current request. */
 @Component
 public class Messages {
@@ -16,6 +18,11 @@ public class Messages {
 
     /** Falls back to the code itself so a missing translation degrades instead of failing the request. */
     public String get(String code, Object... args) {
-        return messageSource.getMessage(code, args, code, LocaleContextHolder.getLocale());
+        return forLocale(LocaleContextHolder.getLocale(), code, args);
+    }
+
+    /** For text produced outside a request (background jobs) or stored for later, where the language is explicit. */
+    public String forLocale(Locale locale, String code, Object... args) {
+        return messageSource.getMessage(code, args, code, locale);
     }
 }

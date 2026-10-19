@@ -1,5 +1,6 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.exception.ServiceUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -87,7 +88,8 @@ class ImageStorageServiceTest {
         ImageStorageService storage = new ImageStorageService(restTemplate, SUPABASE_URL, SERVICE_KEY, "uploads", tempDir);
 
         assertThatThrownBy(() -> storage.store(new MockMultipartFile("file", "a.jpg", "image/jpeg", PNG_BYTES), "rooms"))
-                .isInstanceOf(IllegalStateException.class);
+                .isInstanceOf(ServiceUnavailableException.class)
+                .hasFieldOrPropertyWithValue("code", "error.image.uploadFailed");
     }
 
     // ── local fallback ─────────────────────────────────────────────────────────

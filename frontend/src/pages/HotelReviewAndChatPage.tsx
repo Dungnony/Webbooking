@@ -8,18 +8,13 @@ import { useTranslation } from 'react-i18next';
 import i18n, { dateLocale } from '../i18n';
 import { hotelApi, reviewApi, chatApi, ChatMessage, HotelWithStats, ReviewEligibility, ReviewItem } from '../api';
 import { getErrorMessage } from '../utils/errors';
+import { ratingLabelKey } from '../utils/hotelDisplay';
 import { invalidateCache, invalidateCachePrefix, reviewCacheKey } from '../utils/apiCache';
 
 
 /* ── Helper Functions ── */
 // Module-level helpers use i18n.t directly; the page re-renders on language change via useTranslation.
-const getRatingLabel = (score: number) => {
-  if (score >= 9) return i18n.t('common.rating.exceptional');
-  if (score >= 8) return i18n.t('common.rating.veryGood');
-  if (score >= 7) return i18n.t('common.rating.good');
-  if (score >= 5) return i18n.t('common.rating.okay');
-  return i18n.t('common.rating.average');
-};
+const getRatingLabel = (score: number) => i18n.t(`common.rating.${ratingLabelKey(score)}`);
 
 const QUICK_QUESTION_KEYS = ['amenities', 'price', 'checkIn', 'directions', 'cancellation'] as const;
 

@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import Footer from '../components/Footer';
 import SearchWidget from '../components/SearchWidget';
 import { getHotelImage } from '../utils/imageUtils';
+import { lowestRoomPrice, ratingLabelKey } from '../utils/hotelDisplay';
 import { hotelApi, HotelWithStats } from '../api';
 import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
@@ -96,7 +97,7 @@ const SearchResults: React.FC = () => {
 
     // Lọc theo khoảng giá
     result = result.filter(h => {
-      const price = h.rooms?.[0]?.pricePerNight ?? 0;
+      const price = lowestRoomPrice(h) ?? 0;
       return price >= priceRange[0] && price <= priceRange[1];
     });
 
@@ -368,10 +369,9 @@ const SearchResults: React.FC = () => {
                 </div>
               ) : (
                 filtered.map((hotel) => {
-                  const price = hotel.rooms?.[0]?.pricePerNight ?? null;
+                  const price = lowestRoomPrice(hotel);
                   const rating = hotel.ratingAvg ?? null;
-                  const ratingLabel = rating === null ? t('common.rating.none')
-                    : t(`common.rating.${rating >= 9 ? 'superb' : rating >= 8 ? 'veryGood' : 'good'}`);
+                  const ratingLabel = t(`common.rating.${ratingLabelKey(rating)}`);
 
                   return (
                     <div

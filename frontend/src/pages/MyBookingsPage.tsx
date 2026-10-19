@@ -31,12 +31,17 @@ const canCancelDirectly = (booking: Booking) =>
 const canRequestCancel = (booking: Booking) =>
   ACTIVE_STATUSES.includes(booking.status) && booking.paymentStatus === 'PAID' && isBeforeCheckIn(booking);
 
-type StatusLabelKey = 'myBookings.status.pending' | 'myBookings.status.confirmed' | 'myBookings.status.cancelled';
+type StatusLabelKey =
+  | 'myBookings.status.pending'
+  | 'myBookings.status.confirmed'
+  | 'myBookings.status.cancelled'
+  | 'myBookings.status.rejected';
 
 const statusConfig: Record<string, { labelKey: StatusLabelKey; color: string; className: string }> = {
   PENDING: { labelKey: 'myBookings.status.pending', color: 'warning', className: 'status-pending' },
   CONFIRMED: { labelKey: 'myBookings.status.confirmed', color: 'success', className: 'status-confirmed' },
   CANCELLED: { labelKey: 'myBookings.status.cancelled', color: 'error', className: 'status-cancelled' },
+  REJECTED: { labelKey: 'myBookings.status.rejected', color: 'error', className: 'status-cancelled' },
 };
 
 const statusOf = (booking: Booking) => (booking.status && statusConfig[booking.status]) || statusConfig.PENDING;

@@ -3,9 +3,12 @@ package com.Nhom2.booking.controller;
 import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.exception.ServiceUnavailableException;
 import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.exception.UnauthorizedException;
 import com.Nhom2.booking.i18n.Messages;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -19,6 +22,8 @@ import java.util.Map;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     private final Messages messages;
 
@@ -44,6 +49,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<Map<String, String>> handleTooManyRequests(TooManyRequestsException ex) {
         return localized(HttpStatus.TOO_MANY_REQUESTS, ex);
+    }
+
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<Map<String, String>> handleServiceUnavailable(ServiceUnavailableException ex) {
+        log.error("Dependency failure ({})", ex.getCode(), ex);
+        return localized(HttpStatus.SERVICE_UNAVAILABLE, ex);
     }
 
     @ExceptionHandler(BusinessException.class)

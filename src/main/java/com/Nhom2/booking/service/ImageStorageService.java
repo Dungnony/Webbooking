@@ -1,6 +1,7 @@
 package com.Nhom2.booking.service;
 
 import com.Nhom2.booking.exception.BusinessException;
+import com.Nhom2.booking.exception.ServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -104,7 +105,7 @@ public class ImageStorageService {
                     String.class);
         } catch (RestClientException e) {
             log.error("Supabase upload of {} failed", objectPath, e);
-            throw new IllegalStateException("Không thể tải ảnh lên kho lưu trữ, vui lòng thử lại sau.", e);
+            throw new ServiceUnavailableException("error.image.uploadFailed", e);
         }
         return supabaseUrl + "/storage/v1/object/public/" + bucket + "/" + objectPath;
     }
@@ -115,7 +116,7 @@ public class ImageStorageService {
             Files.createDirectories(target.getParent());
             Files.write(target, bytes);
         } catch (IOException e) {
-            throw new IllegalStateException("Lỗi khi lưu file: " + e.getMessage(), e);
+            throw new ServiceUnavailableException("error.image.uploadFailed", e);
         }
         return LOCAL_URL_PREFIX + objectPath;
     }
@@ -124,7 +125,7 @@ public class ImageStorageService {
         try {
             return file.getBytes();
         } catch (IOException e) {
-            throw new IllegalStateException("Không đọc được file tải lên: " + e.getMessage(), e);
+            throw new BusinessException("error.image.unreadable");
         }
     }
 

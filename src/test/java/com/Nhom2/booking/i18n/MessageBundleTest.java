@@ -22,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MessageBundleTest {
 
     private static final Path MAIN_SOURCES = Path.of("src", "main", "java");
-    private static final Pattern CODE_LITERAL = Pattern.compile("\"(error\\.[A-Za-z0-9_.]+)\"");
+    private static final Pattern CODE_LITERAL = Pattern.compile("\"((?:error|notification|mail)\\.[A-Za-z0-9_.]+)\"");
 
     @Test
     void vietnameseAndEnglishDefineTheSameKeys() throws IOException {
@@ -31,7 +31,7 @@ class MessageBundleTest {
     }
 
     @Test
-    void everyErrorCodeUsedInTheCodeHasATranslation() throws IOException {
+    void everyMessageCodeUsedInTheCodeHasATranslation() throws IOException {
         Set<String> codes = codesUsedInMainSources();
         assertThat(codes).isNotEmpty();
 

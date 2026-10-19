@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Table, Button, Space, Modal, Form, Input, message, Upload, Drawer, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, PictureOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { hotelApi, imageApi, roomApi, HotelWithStats } from '../../api';
 import type { Hotel, Room } from '../../api-generated';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -14,6 +15,7 @@ type HotelFormValues = Pick<Hotel, 'name' | 'city' | 'address' | 'description'>;
 type RoomFormValues = Pick<Room, 'name' | 'type' | 'pricePerNight' | 'capacity' | 'quantity' | 'description'>;
 
 const AdminHotels: React.FC = () => {
+  const { t } = useTranslation();
   const [hotels, setHotels] = useState<HotelWithStats[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,21 +46,21 @@ const AdminHotels: React.FC = () => {
   const [currentUploadRoomId, setCurrentUploadRoomId] = useState<number | null>(null);
   const [roomFileList, setRoomFileList] = useState<UploadFile[]>([]);
 
-  useEffect(() => {
-    loadHotels();
-  }, []);
-
-  const loadHotels = async () => {
+  const loadHotels = useCallback(async () => {
     try {
       setLoading(true);
       const data = await cachedFetch('hotels_all', () => hotelApi.getAll(), HOTEL_LIST_TTL);
       setHotels(data || []);
     } catch (error) {
-      message.error(getErrorMessage(error, 'Không thể tải danh sách khách sạn'));
+      message.error(getErrorMessage(error, t('admin.hotels.loadFailed')));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    loadHotels();
+  }, [loadHotels]);
 
   const handleSaveHotel = async (values: HotelFormValues) => {
     try {
@@ -67,37 +69,37 @@ const AdminHotels: React.FC = () => {
         // Rooms are owned by the Room side and must not be sent back (undefined is dropped from the JSON).
         await hotelApi.update(editingHotel.id, { ...editingHotel, ...values, rooms: undefined });
         invalidateCache(`hotel_${editingHotel.id}`);
-        message.success('Cập nhật khách sạn thành công');
+        message.success(t('admin.hotels.updated'));
       } else {
         await hotelApi.create(values);
-        message.success('Thêm khách sạn thành công');
+        message.success(t('admin.hotels.created'));
       }
       setHotelModalOpen(false);
       // Xóa cache để force reload dữ liệu mới
       invalidateCache('hotels_all');
       loadHotels();
     } catch (error) {
-      message.error(getErrorMessage(error, 'Lưu khách sạn thất bại'));
+      message.error(getErrorMessage(error, t('admin.hotels.saveFailed')));
     }
   };
 
   const handleDeleteHotel = (id: number) => {
     Modal.confirm({
-      title: 'Xóa khách sạn',
-      content: 'Bạn có chắc chắn muốn xóa khách sạn này không? Hành động này không thể hoàn tác.',
-      okText: 'Xóa',
+      title: t('admin.hotels.deleteTitle'),
+      content: t('admin.hotels.deleteBody'),
+      okText: t('admin.common.delete'),
       okType: 'danger',
-      cancelText: 'Hủy',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await hotelApi.delete(id);
-          message.success('Đã xóa khách sạn');
+          message.success(t('admin.hotels.deleted'));
           // Xóa cache sau khi xóa KS
           invalidateCache('hotels_all');
           invalidateCache(`hotel_${id}`);
           loadHotels();
         } catch (error) {
-          message.error(getErrorMessage(error, 'Lỗi khi xóa khách sạn'));
+          message.error(getErrorMessage(error, t('admin.hotels.deleteFailed')));
         }
       }
     });
@@ -105,21 +107,21 @@ const AdminHotels: React.FC = () => {
 
   const handleUploadHotelImage = async () => {
     if (!currentUploadHotelId || fileList.length === 0) {
-      message.warning('Vui lòng chọn ảnh');
+      message.warning(t('admin.hotels.chooseImageFirst'));
       return;
     }
     const file = fileList[0].originFileObj as File;
     try {
       setUploading(true);
       await imageApi.uploadHotelImage(currentUploadHotelId, file);
-      message.success('Tải ảnh lên thành công');
+      message.success(t('admin.hotels.imageUploaded'));
       setUploadHotelModalOpen(false);
       setFileList([]);
       invalidateCache('hotels_all');
       invalidateCache(`hotel_${currentUploadHotelId}`);
       loadHotels();
     } catch (error) {
-      message.error(getErrorMessage(error, 'Lỗi khi tải ảnh lên'));
+      message.error(getErrorMessage(error, t('admin.hotels.imageUploadFailed')));
     } finally {
       setUploading(false);
     }
@@ -138,7 +140,7 @@ const AdminHotels: React.FC = () => {
       const res = await roomApi.getByHotel(hotelId);
       setRooms(res.data || []);
     } catch (error) {
-      message.error(getErrorMessage(error, 'Không thể tải danh sách phòng'));
+      message.error(getErrorMessage(error, t('admin.hotels.roomsLoadFailed')));
     } finally {
       setLoadingRooms(false);
     }
@@ -162,34 +164,34 @@ const AdminHotels: React.FC = () => {
     try {
       if (editingRoom?.id !== undefined) {
         await roomApi.update(editingRoom.id, values);
-        message.success('Cập nhật phòng thành công');
+        message.success(t('admin.hotels.roomUpdated'));
       } else {
         await roomApi.create(currentHotelForRooms.id, values);
-        message.success('Thêm phòng thành công');
+        message.success(t('admin.hotels.roomCreated'));
       }
       setRoomModalOpen(false);
       invalidateCache('hotels_all');
       invalidateCache(`hotel_${currentHotelForRooms.id}`);
       reloadCurrentHotelRooms();
     } catch (error) {
-      message.error(getErrorMessage(error, editingRoom ? 'Lỗi khi cập nhật phòng' : 'Lỗi khi thêm phòng'));
+      message.error(getErrorMessage(error, editingRoom ? t('admin.hotels.roomUpdateFailed') : t('admin.hotels.roomCreateFailed')));
     }
   };
 
   const handleDeleteRoom = async (roomId: number) => {
     Modal.confirm({
-      title: 'Xóa phòng',
-      content: 'Bạn có chắc muốn xóa phòng này?',
-      okText: 'Xóa',
+      title: t('admin.hotels.roomDeleteTitle'),
+      content: t('admin.hotels.roomDeleteBody'),
+      okText: t('admin.common.delete'),
       okType: 'danger',
-      cancelText: 'Hủy',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await roomApi.delete(roomId);
-          message.success('Đã xóa phòng');
+          message.success(t('admin.hotels.roomDeleted'));
           reloadCurrentHotelRooms();
         } catch (error) {
-          message.error(getErrorMessage(error, 'Lỗi khi xóa phòng'));
+          message.error(getErrorMessage(error, t('admin.hotels.roomDeleteFailed')));
         }
       }
     });
@@ -197,19 +199,19 @@ const AdminHotels: React.FC = () => {
 
   const handleUploadRoomImage = async () => {
     if (!currentUploadRoomId || roomFileList.length === 0) {
-      message.warning('Vui lòng chọn ảnh');
+      message.warning(t('admin.hotels.chooseImageFirst'));
       return;
     }
     const file = roomFileList[0].originFileObj as File;
     try {
       setUploading(true);
       await imageApi.uploadRoomImage(currentUploadRoomId, file);
-      message.success('Tải ảnh lên thành công');
+      message.success(t('admin.hotels.imageUploaded'));
       setUploadRoomModalOpen(false);
       setRoomFileList([]);
       reloadCurrentHotelRooms();
     } catch (error) {
-      message.error(getErrorMessage(error, 'Lỗi khi tải ảnh lên'));
+      message.error(getErrorMessage(error, t('admin.hotels.imageUploadFailed')));
     } finally {
       setUploading(false);
     }
@@ -218,7 +220,7 @@ const AdminHotels: React.FC = () => {
   const hotelColumns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 60 },
     {
-      title: 'Ảnh đại diện',
+      title: t('admin.hotels.coverImage'),
       key: 'image',
       render: (_: unknown, record: HotelWithStats) => {
         const imageUrl = getHotelImage(record);
@@ -231,11 +233,11 @@ const AdminHotels: React.FC = () => {
         );
       }
     },
-    { title: 'Tên khách sạn', dataIndex: 'name', key: 'name', render: (text: string) => <b>{text}</b> },
-    { title: 'Thành phố', dataIndex: 'city', key: 'city' },
-    { title: 'Đánh giá', dataIndex: 'ratingAvg', key: 'ratingAvg', render: (r?: number) => r ? <Tag color="gold">{r.toFixed(1)}</Tag> : '—' },
+    { title: t('admin.hotels.name'), dataIndex: 'name', key: 'name', render: (text: string) => <b>{text}</b> },
+    { title: t('admin.hotels.city'), dataIndex: 'city', key: 'city' },
+    { title: t('admin.hotels.rating'), dataIndex: 'ratingAvg', key: 'ratingAvg', render: (r?: number) => r ? <Tag color="gold">{r.toFixed(1)}</Tag> : '—' },
     {
-      title: 'Hành động',
+      title: t('admin.common.actions'),
       key: 'action',
       render: (_: unknown, record: HotelWithStats) => {
         const hotelId = record.id;
@@ -243,14 +245,14 @@ const AdminHotels: React.FC = () => {
         return (
           <Space>
             <Button size="small" type="primary" onClick={() => openRoomsDrawer(record)}>
-              Quản lý Phòng
+              {t('admin.hotels.manageRooms')}
             </Button>
             <Button size="small" icon={<UploadOutlined />} onClick={() => {
               setCurrentUploadHotelId(hotelId);
               setFileList([]);
               setUploadHotelModalOpen(true);
             }}>
-              Ảnh
+              {t('admin.hotels.image')}
             </Button>
             <Button size="small" icon={<EditOutlined />} onClick={() => {
               setEditingHotel(record);
@@ -265,13 +267,13 @@ const AdminHotels: React.FC = () => {
   ];
 
   const roomColumns = [
-    { title: 'Tên phòng', dataIndex: 'name', key: 'name', render: (t: string) => <b>{t}</b> },
-    { title: 'Loại', dataIndex: 'type', key: 'type' },
-    { title: 'Giá / đêm', dataIndex: 'pricePerNight', key: 'pricePerNight', render: (p?: number) => p ? `${p.toLocaleString('vi-VN')}₫` : '—' },
-    { title: 'Sức chứa', dataIndex: 'capacity', key: 'capacity' },
-    { title: 'Số lượng', dataIndex: 'quantity', key: 'quantity' },
+    { title: t('admin.hotels.roomName'), dataIndex: 'name', key: 'name', render: (name: string) => <b>{name}</b> },
+    { title: t('admin.hotels.roomType'), dataIndex: 'type', key: 'type' },
+    { title: t('admin.hotels.pricePerNight'), dataIndex: 'pricePerNight', key: 'pricePerNight', render: (p?: number) => p ? `${p.toLocaleString('vi-VN')}₫` : '—' },
+    { title: t('admin.hotels.capacity'), dataIndex: 'capacity', key: 'capacity' },
+    { title: t('admin.hotels.quantity'), dataIndex: 'quantity', key: 'quantity' },
     {
-      title: 'Ảnh',
+      title: t('admin.hotels.image'),
       key: 'image',
       render: (_: unknown, record: Room) => {
         const roomId = record.id;
@@ -282,13 +284,13 @@ const AdminHotels: React.FC = () => {
             setRoomFileList([]);
             setUploadRoomModalOpen(true);
           }}>
-            Upload
+            {t('admin.hotels.upload')}
           </Button>
         );
       }
     },
     {
-      title: 'Hành động',
+      title: t('admin.common.actions'),
       key: 'action',
       render: (_: unknown, record: Room) => {
         const roomId = record.id;
@@ -306,13 +308,13 @@ const AdminHotels: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>Quản lý Khách sạn</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{t('admin.menu.hotels')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => {
           setEditingHotel(null);
           hotelForm.resetFields();
           setHotelModalOpen(true);
         }}>
-          Thêm khách sạn
+          {t('admin.hotels.add')}
         </Button>
       </div>
 
@@ -326,7 +328,7 @@ const AdminHotels: React.FC = () => {
 
       {/* Modal Thêm/Sửa Khách sạn */}
       <Modal
-        title={editingHotel ? "Sửa thông tin khách sạn" : "Thêm khách sạn mới"}
+        title={editingHotel ? t('admin.hotels.editTitle') : t('admin.hotels.createTitle')}
         open={hotelModalOpen}
         onOk={() => hotelForm.submit()}
         onCancel={() => setHotelModalOpen(false)}
@@ -334,17 +336,17 @@ const AdminHotels: React.FC = () => {
       >
         <Form form={hotelForm} layout="vertical" onFinish={handleSaveHotel}>
           <div style={{ display: 'flex', gap: 16 }}>
-            <Form.Item name="name" label="Tên khách sạn" rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Input placeholder="Ví dụ: InterContinental" />
+            <Form.Item name="name" label={t('admin.hotels.name')} rules={[{ required: true }]} style={{ flex: 1 }}>
+              <Input placeholder={t('admin.hotels.namePlaceholder')} />
             </Form.Item>
-            <Form.Item name="city" label="Thành phố" rules={[{ required: true }]} style={{ width: 150 }}>
-              <Input placeholder="Hà Nội" />
+            <Form.Item name="city" label={t('admin.hotels.city')} rules={[{ required: true }]} style={{ width: 150 }}>
+              <Input placeholder={t('admin.hotels.cityPlaceholder')} />
             </Form.Item>
           </div>
-          <Form.Item name="address" label="Địa chỉ cụ thể" rules={[{ required: true }]}>
+          <Form.Item name="address" label={t('admin.hotels.address')} rules={[{ required: true }]}>
             <Input />
           </Form.Item>
-          <Form.Item name="description" label="Mô tả" rules={[{ required: true }]}>
+          <Form.Item name="description" label={t('admin.hotels.description')} rules={[{ required: true }]}>
             <TextArea rows={4} />
           </Form.Item>
         </Form>
@@ -352,7 +354,7 @@ const AdminHotels: React.FC = () => {
 
       {/* Modal Upload Ảnh Khách sạn */}
       <Modal
-        title="Tải ảnh Khách sạn lên"
+        title={t('admin.hotels.uploadHotelImageTitle')}
         open={uploadHotelModalOpen}
         onOk={handleUploadHotelImage}
         onCancel={() => setUploadHotelModalOpen(false)}
@@ -365,13 +367,13 @@ const AdminHotels: React.FC = () => {
           listType="picture"
           accept=".jpg,.jpeg,.png,.webp,.gif"
         >
-          <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
+          <Button icon={<UploadOutlined />}>{t('admin.hotels.chooseImage')}</Button>
         </Upload>
       </Modal>
 
       {/* Drawer Quản lý Phòng */}
       <Drawer
-        title={`Quản lý phòng: ${currentHotelForRooms?.name}`}
+        title={t('admin.hotels.roomsDrawerTitle', { name: currentHotelForRooms?.name ?? '' })}
         placement="right"
         width={800}
         onClose={() => setRoomsDrawerOpen(false)}
@@ -379,7 +381,7 @@ const AdminHotels: React.FC = () => {
       >
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openRoomModal(null)}>
-            Thêm phòng
+            {t('admin.hotels.addRoom')}
           </Button>
         </div>
         <Table
@@ -393,44 +395,44 @@ const AdminHotels: React.FC = () => {
 
       {/* Modal Thêm/Sửa Phòng */}
       <Modal
-        title={editingRoom ? 'Sửa thông tin phòng' : 'Thêm phòng mới'}
+        title={editingRoom ? t('admin.hotels.editRoomTitle') : t('admin.hotels.createRoomTitle')}
         open={roomModalOpen}
         onOk={() => roomForm.submit()}
         onCancel={() => setRoomModalOpen(false)}
       >
         <Form form={roomForm} layout="vertical" onFinish={handleSaveRoom}>
-          <Form.Item name="name" label="Tên phòng" rules={[{ required: true }]}>
+          <Form.Item name="name" label={t('admin.hotels.roomName')} rules={[{ required: true }]}>
             <Input placeholder="P.101" />
           </Form.Item>
-          <Form.Item name="type" label="Loại phòng" rules={[{ required: true }]}>
+          <Form.Item name="type" label={t('admin.hotels.roomType')} rules={[{ required: true }]}>
             <Input placeholder="Deluxe, Standard..." />
           </Form.Item>
           <div style={{ display: 'flex', gap: 16 }}>
-            <Form.Item name="pricePerNight" label="Giá mỗi đêm (VNĐ)" rules={[{ required: true }]} style={{ flex: 1 }}>
+            <Form.Item name="pricePerNight" label={t('admin.hotels.pricePerNightVnd')} rules={[{ required: true }]} style={{ flex: 1 }}>
               <Input type="number" min={1} />
             </Form.Item>
-            <Form.Item name="capacity" label="Sức chứa" rules={[{ required: true }]} style={{ width: 100 }}>
+            <Form.Item name="capacity" label={t('admin.hotels.capacity')} rules={[{ required: true }]} style={{ width: 100 }}>
               <Input type="number" min={1} />
             </Form.Item>
             <Form.Item
               name="quantity"
-              label="Số lượng"
+              label={t('admin.hotels.quantity')}
               rules={[{ required: true }]}
-              tooltip="Đặt 0 để ngừng nhận đặt phòng mà vẫn giữ lịch sử"
+              tooltip={t('admin.hotels.quantityTooltip')}
               style={{ width: 100 }}
             >
               <Input type="number" min={0} />
             </Form.Item>
           </div>
-          <Form.Item name="description" label="Mô tả phòng">
-            <TextArea rows={2} placeholder="Điều hòa, Tủ lạnh..." />
+          <Form.Item name="description" label={t('admin.hotels.roomDescription')}>
+            <TextArea rows={2} placeholder={t('admin.hotels.roomDescriptionPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
 
       {/* Modal Upload Ảnh Phòng */}
       <Modal
-        title="Tải ảnh Phòng lên"
+        title={t('admin.hotels.uploadRoomImageTitle')}
         open={uploadRoomModalOpen}
         onOk={handleUploadRoomImage}
         onCancel={() => setUploadRoomModalOpen(false)}
@@ -443,7 +445,7 @@ const AdminHotels: React.FC = () => {
           listType="picture"
           accept=".jpg,.jpeg,.png,.webp,.gif"
         >
-          <Button icon={<UploadOutlined />}>Chọn ảnh</Button>
+          <Button icon={<UploadOutlined />}>{t('admin.hotels.chooseImage')}</Button>
         </Upload>
       </Modal>
 

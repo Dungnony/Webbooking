@@ -13,6 +13,7 @@ import { hotelApi, reviewApi, HotelWithStats } from '../api';
 import { useWishlist } from '../context/useWishlist';
 import { transformImageUrl } from '../utils/imageUtils';
 import { cachedFetch, HOTEL_DETAIL_TTL, reviewCacheKey } from '../utils/apiCache';
+import { lowestRoomPrice, ratingLabelKey, sortRoomsByPrice } from '../utils/hotelDisplay';
 import HotelReviewAndChatPage from './HotelReviewAndChatPage';
 
 const AMENITY_KEYS = ['wifi', 'parking', 'breakfast', 'pool', 'gym', 'restaurant', 'frontDesk', 'airConditioning'] as const;
@@ -27,14 +28,6 @@ const SECTION_IDS: Partial<Record<NavTab, string>> = {
 };
 const POLICY_KEYS = ['checkIn', 'checkOut', 'cancellation', 'children', 'pets', 'payment'] as const;
 const REVIEWS_CACHE_TTL_MS = 60_000;
-
-const ratingKey = (score: number) => {
-  if (score >= 9) return 'exceptional';
-  if (score >= 8) return 'veryGood';
-  if (score >= 7) return 'good';
-  if (score >= 5) return 'okay';
-  return 'average';
-};
 
 const HotelDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -136,10 +129,10 @@ const HotelDetailPage: React.FC = () => {
 
   const hotelName = hotel.name || t('hotel.fallbackName');
   const location = hotel.city || hotel.address || 'Việt Nam';
-  const basePrice: number | null = hotel.rooms?.[0]?.pricePerNight ?? null;
+  const basePrice = lowestRoomPrice(hotel);
   const displayRating = reviewStats.avg ? reviewStats.avg.toFixed(1) : (hotel.ratingAvg ? hotel.ratingAvg.toFixed(1) : null);
   const displayRatingNum = reviewStats.avg ?? hotel.ratingAvg ?? null;
-  const ratingLabel = displayRatingNum ? t(`common.rating.${ratingKey(displayRatingNum)}`) : t('common.rating.none');
+  const ratingLabel = t(`common.rating.${ratingLabelKey(displayRatingNum)}`);
 
   const handleShare = async () => {
     try {
@@ -210,11 +203,6 @@ const HotelDetailPage: React.FC = () => {
       <div id="overview-section" className="container" style={{ padding: '14px 24px 0' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-              {[1, 2, 3].map(i => (
-                <span key={i} style={{ color: '#febb02', fontSize: 14 }}>★</span>
-              ))}
-            </div>
             <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0, lineHeight: 1.3 }}>{hotelName}</h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
               <span
@@ -265,7 +253,7 @@ const HotelDetailPage: React.FC = () => {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: '#fff', fontSize: 18, fontWeight: 700, pointerEvents: 'none'
                       }}>
-                        {t('hotel.morePhotos', { count: allImages.length - 5 })}
+                        {t('hotel.morePhotos', { count: allImages.length })}
                       </div>
                     )}
                   </div>
@@ -342,22 +330,6 @@ const HotelDetailPage: React.FC = () => {
                   {displayRating || '—'}
                 </div>
               </div>
-
-              <Divider style={{ margin: '16px 0' }} />
-
-              <div style={{ fontSize: 13, color: '#333', lineHeight: 1.8, marginBottom: 16 }}>
-                <div>{t('hotel.highlights.location')}</div>
-                <div>{t('hotel.highlights.staff')}</div>
-                <div>{t('hotel.highlights.rooms')}</div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13 }}>
-                <span style={{ fontWeight: 600, color: '#1a1a1a' }}>{t('hotel.staffScore')}</span>
-                <span style={{ fontWeight: 700, color: '#1a1a1a' }}>{displayRating || '—'}</span>
-              </div>
-              <div style={{ background: '#e2e8f0', height: 4, borderRadius: 2, marginTop: 6, overflow: 'hidden' }}>
-                <div style={{ background: '#003b95', width: `${displayRating ? (Number(displayRating) / 10) * 100 : 0}%`, height: '100%' }}></div>
-              </div>
             </div>
           </Col>
         </Row>
@@ -376,7 +348,7 @@ const HotelDetailPage: React.FC = () => {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: '#fff', fontSize: 13, fontWeight: 600, pointerEvents: 'none'
                   }}>
-                    {t('hotel.morePhotos', { count: allImages.length - 6 })}
+                    {t('hotel.morePhotos', { count: allImages.length })}
                   </div>
                 )}
               </div>
@@ -403,7 +375,7 @@ const HotelDetailPage: React.FC = () => {
             {hotel.rooms && hotel.rooms.length > 0 && (
               <div id="rooms-section" style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 4, padding: 20, marginBottom: 16 }}>
                 <h3 style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>{t('hotel.availableRooms')}</h3>
-                {hotel.rooms.map(room => {
+                {sortRoomsByPrice(hotel.rooms).map(room => {
                   const roomImg = room.images?.[0]?.imageUrl;
                   return (
                     <div key={room.id} className="room-item-row" style={{

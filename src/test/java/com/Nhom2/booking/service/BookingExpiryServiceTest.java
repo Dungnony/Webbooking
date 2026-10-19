@@ -16,11 +16,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class BookingExpiryServiceTest {
@@ -65,7 +64,9 @@ class BookingExpiryServiceTest {
         assertThat(expired).isEqualTo(1);
         assertThat(stale.getStatus()).isEqualTo(BookingStatus.CANCELLED);
         verify(bookingRepository).saveAll(List.of(stale));
-        verify(notificationService).create(eq(alice), anyString(), anyString());
+        verify(notificationService).create(
+                eq(alice), eq("notification.bookingExpired.title"), eq("notification.bookingExpired.body"),
+                eq(7L), eq(BookingExpiryService.PAYMENT_WINDOW.toMinutes()));
     }
 
     @Test
@@ -74,7 +75,7 @@ class BookingExpiryServiceTest {
                 .thenReturn(List.of());
 
         assertThat(expiryService.expireUnpaidBookings()).isZero();
-        verify(notificationService, never()).create(any(), anyString(), anyString());
+        verifyNoInteractions(notificationService);
     }
 
     private static Booking booking(Long id, User user) {

@@ -88,6 +88,7 @@ npm run generate-api            # ghi đè src/api-generated.ts — không sửa
 # Frontend
 cd frontend
 npm run lint
+npm test          # Vitest
 npm run build
 ```
 
@@ -110,11 +111,18 @@ Giới hạn chống dò mật khẩu/spam (theo tài khoản/email, lưu trong 
 - Không hủy được từ ngày nhận phòng trở đi; booking đã thanh toán phải gửi yêu cầu hủy để admin duyệt và hoàn tiền.
 - Chỉ khách có booking đã thanh toán tại khách sạn mới được đánh giá, mỗi người 1 lần; `rating_avg` tự tính lại sau mỗi đánh giá.
 - Mỗi email chỉ một tài khoản; đổi email phải xác nhận OTP gửi tới email mới.
+- Duyệt yêu cầu hủy của booking đã thanh toán sẽ chuyển trạng thái thanh toán sang `REFUNDED`.
+
+## Đa ngôn ngữ (Việt/Anh)
+
+- Frontend dùng react-i18next; từ điển ở [`frontend/src/i18n/locales`](frontend/src/i18n/locales). `vi.ts` là bản gốc, `en.ts` phải có đủ khóa (TypeScript kiểm tra).
+- Mọi request gửi header `Accept-Language`. Backend trả lỗi dạng `{ message, code }`: `message` đã dịch, `code` cố định để frontend so khớp. Thông điệp ở [`messages.properties`](src/main/resources/messages.properties) (tiếng Việt, mặc định) và `messages_en.properties`; `MessageBundleTest` báo lỗi nếu thiếu bản dịch.
+- Thông báo (chuông) lưu mã thông điệp nên hiển thị theo ngôn ngữ người đọc đang chọn. Email gửi trong request theo ngôn ngữ của request; email hóa đơn gửi nền nên viết song ngữ.
 
 Quy tắc đầy đủ nằm trong [`SecurityConfig.java`](src/main/java/com/Nhom2/booking/config/SecurityConfig.java) và được kiểm tra bởi [`SecurityRulesTest`](src/test/java/com/Nhom2/booking/config/SecurityRulesTest.java).
 
 ## Deploy
 
 - **Backend**: Railway build từ [`Dockerfile`](Dockerfile). Khai báo đủ các biến môi trường ở bảng trên trong dashboard Railway (đặc biệt `SUPABASE_URL`, `SUPABASE_KEY`, `JPA_DDL_AUTO=validate`).
-- **CI**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy test backend và lint/build frontend cho mỗi push vào `main` và mỗi pull request.
+- **CI**: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) chạy test backend và lint/test/build frontend cho mỗi push vào `main` và mỗi pull request.
 - **Frontend**: Vercel, thư mục gốc là `frontend/`.

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Row, Col } from 'antd';
@@ -8,10 +8,11 @@ import SearchWidget from '../components/SearchWidget';
 import HotelCard from '../components/HotelCard';
 import { hotelApi, HotelWithStats } from '../api';
 import { useWishlist } from '../context/useWishlist';
-import { TrophyTwoTone, SafetyCertificateTwoTone, CustomerServiceTwoTone, StarTwoTone } from '@ant-design/icons';
+import { TagTwoTone, SafetyCertificateTwoTone, CustomerServiceTwoTone, StarTwoTone } from '@ant-design/icons';
 import AIAssistantWidget from '../components/AIAssistantWidget';
 import { cachedFetch, HOTEL_LIST_TTL } from '../utils/apiCache';
 
+const FEATURED_COUNT = 8;
 
 const HomePage: React.FC = () => {
   const navigate = useNavigate();
@@ -27,6 +28,11 @@ const HomePage: React.FC = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // The subtitle promises "sorted by guest review score", so the order has to match it.
+  const featuredHotels = useMemo(
+    () => [...hotels].sort((a, b) => (b.ratingAvg ?? 0) - (a.ratingAvg ?? 0)).slice(0, FEATURED_COUNT),
+    [hotels],
+  );
 
   return (
     <div className="page-wrapper">
@@ -108,7 +114,7 @@ const HomePage: React.FC = () => {
             </div>
           ) : (
             <Row gutter={[16, 20]}>
-              {hotels.slice(0, 8).map((hotel) => {
+              {featuredHotels.map((hotel) => {
                 const hotelId = hotel.id;
                 if (hotelId === undefined) return null;
                 return (
@@ -135,9 +141,9 @@ const HomePage: React.FC = () => {
           </h2>
           <Row gutter={[24, 24]}>
             {[
-              { icon: <TrophyTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.bestPrice'), desc: t('home.why.bestPriceDesc') },
-              { icon: <SafetyCertificateTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.securePayment'), desc: t('home.why.securePaymentDesc') },
-              { icon: <CustomerServiceTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.support'), desc: t('home.why.supportDesc') },
+              { icon: <TagTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.noFee'), desc: t('home.why.noFeeDesc') },
+              { icon: <SafetyCertificateTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.qrPayment'), desc: t('home.why.qrPaymentDesc') },
+              { icon: <CustomerServiceTwoTone twoToneColor="#006ce4" style={{ fontSize: 36 }} />, title: t('home.why.chat'), desc: t('home.why.chatDesc') },
               { icon: <StarTwoTone twoToneColor="#febb02" style={{ fontSize: 36 }} />, title: t('home.why.realReviews'), desc: t('home.why.realReviewsDesc') },
             ].map((item) => (
               <Col key={item.title} xs={24} sm={12} md={6}>

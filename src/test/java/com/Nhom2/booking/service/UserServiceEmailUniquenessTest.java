@@ -1,5 +1,7 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.dto.RegisterRequest;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
@@ -12,10 +14,12 @@ import com.Nhom2.booking.security.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -52,7 +56,9 @@ class UserServiceEmailUniquenessTest {
                 new OtpService(),
                 passwordEncoder,
                 mock(GoogleTokenVerifier.class),
-                new RateLimiter(Clock.systemUTC()));
+                new RateLimiter(Clock.systemUTC()),
+                new PendingRegistrations(Clock.systemUTC()),
+                new Messages(LocaleConfig.createMessageSource()));
 
         when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
         when(userRepository.findByEmailIgnoreCase(anyString())).thenReturn(List.of());
@@ -114,6 +120,32 @@ class UserServiceEmailUniquenessTest {
 
         assertThat(userService.verifyOtp("carol@example.com", mailedOtp())).isEqualTo("Register success");
         verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void theRawPasswordIsHashedBeforeTheSignUpWaitsForItsOtp() {
+        userService.sendOtp(register("carol", "carol@example.com"));
+        verify(passwordEncoder).encode(STRONG_PASSWORD);
+
+        userService.verifyOtp("carol@example.com", mailedOtp());
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getPassword()).isEqualTo("$2a$hash");
+    }
+
+    @Test
+    void registrationOtpMailFollowsTheRequestLanguage() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        try {
+            userService.sendOtp(register("carol", "carol@example.com"));
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
+
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        verify(mailService).sendMail(anyString(), subject.capture(), anyString());
+        assertThat(subject.getValue()).startsWith("Confirm your account");
     }
 
     @Test

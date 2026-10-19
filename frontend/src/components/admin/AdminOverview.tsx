@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Card, Col, Row, Statistic, Button, message } from 'antd';
 import {
   FileExcelOutlined,
@@ -7,16 +7,18 @@ import {
   DollarOutlined,
   ReconciliationOutlined
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { adminApi, AdminOverview as OverviewStats } from '../../api';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import type { PieLabelRenderProps } from 'recharts';
 import { cachedFetch } from '../../utils/apiCache';
 import { getErrorMessage } from '../../utils/errors';
 
+const CHART_MONTHS = 6;
+
 interface MonthlyRevenue {
   month: number;
   year: number;
-  name: string;
   revenue: number;
 }
 
@@ -41,6 +43,7 @@ const renderCustomizedLabel = (props: PieLabelRenderProps) => {
 };
 
 const AdminOverview: React.FC = () => {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -48,46 +51,36 @@ const AdminOverview: React.FC = () => {
   const [chartData, setChartData] = useState<MonthlyRevenue[]>([]);
 
   const pieData = [
-    { name: 'Chờ duyệt', value: stats?.pendingBookings || 12 },
-    { name: 'Đã xác nhận', value: Math.max(0, (stats?.totalBookings || 145) - (stats?.pendingBookings || 12)) },
+    { name: t('admin.overview.pending'), value: stats?.pendingBookings ?? 0 },
+    { name: t('admin.overview.confirmed'), value: stats?.confirmedBookings ?? 0 },
+    { name: t('admin.overview.closed'), value: (stats?.cancelledBookings ?? 0) + (stats?.rejectedBookings ?? 0) },
   ];
+  const chartRows = chartData.map(m => ({ ...m, name: t('admin.overview.month', { month: m.month }) }));
   const COLORS = ['#faad14', '#52c41a', '#ff4d4f'];
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       setLoading(true);
       // Cache stats 30 giây (hay thay đổi nên không cache lâu)
-      const statsData = await cachedFetch('admin_stats', () => adminApi.getOverview(), 30_000);
-      // Bơm dữ liệu giả nếu backend trả về 0
-      if (statsData) {
-        if (!statsData.totalRevenue) statsData.totalRevenue = 845000000;
-        if (!statsData.totalBookings || statsData.totalBookings < 50) statsData.totalBookings = 145;
-        if (!statsData.pendingBookings) statsData.pendingBookings = 12;
-      }
-      setStats(statsData || { totalRevenue: 845000000, totalBookings: 145, pendingBookings: 12 });
+      setStats(await cachedFetch('admin_stats', () => adminApi.getOverview(), 30_000));
 
       // Cache danh sách booking 30 giây
       const bookings = await cachedFetch('admin_bookings_all', () => adminApi.getBookings(), 30_000);
 
-      const fakeRevenues = [85000000, 112000000, 98000000, 135000000, 185000000, 0];
-      const months: MonthlyRevenue[] = Array.from({ length: 6 }).map((_, i) => {
+      const months: MonthlyRevenue[] = Array.from({ length: CHART_MONTHS }).map((_, i) => {
         const d = new Date();
-        d.setMonth(d.getMonth() - (5 - i));
+        d.setMonth(d.getMonth() - (CHART_MONTHS - 1 - i));
         return {
           month: d.getMonth() + 1,
           year: d.getFullYear(),
-          name: `Tháng ${d.getMonth() + 1}`,
-          revenue: fakeRevenues[i] || 0
+          revenue: 0
         };
       });
 
       (bookings || []).forEach(b => {
         const dateStr = b.checkInDate || b.createdAt;
-        if ((b.status === 'CONFIRMED' || b.paymentStatus === 'PAID') && dateStr) {
+        // Same definition as the paidRevenue total: only money actually received counts.
+        if (b.paymentStatus === 'PAID' && dateStr) {
           const date = new Date(dateStr);
           const m = date.getMonth() + 1;
           const y = date.getFullYear();
@@ -100,12 +93,16 @@ const AdminOverview: React.FC = () => {
       });
       setChartData(months);
     } catch (error) {
-      message.error('Không thể tải dữ liệu thống kê');
+      message.error(t('admin.overview.loadFailed'));
       console.error(error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const handleExportExcel = async () => {
     try {
@@ -121,9 +118,9 @@ const AdminOverview: React.FC = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
       
-      message.success('Xuất báo cáo Excel thành công');
+      message.success(t('admin.overview.exportSuccess'));
     } catch (error) {
-      message.error(getErrorMessage(error, 'Có lỗi xảy ra khi xuất báo cáo'));
+      message.error(getErrorMessage(error, t('admin.overview.exportFailed')));
       console.error(error);
     } finally {
       setExporting(false);
@@ -171,7 +168,7 @@ const AdminOverview: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>Tổng quan hệ thống</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{t('admin.overview.title')}</h2>
         <Button 
           type="primary" 
           icon={<FileExcelOutlined />} 
@@ -179,7 +176,7 @@ const AdminOverview: React.FC = () => {
           loading={exporting}
           style={{ background: '#107c41', borderColor: '#107c41' }}
         >
-          Xuất Báo Cáo Excel
+          {t('admin.overview.exportExcel')}
         </Button>
       </div>
 
@@ -187,8 +184,8 @@ const AdminOverview: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: 'linear-gradient(135deg, #f6ffed 0%, #e6f7ff 100%)' }}>
             <Statistic
-              title={<span style={{ fontWeight: 600, color: '#595959' }}>Tổng doanh thu</span>}
-              value={stats?.totalRevenue || 0}
+              title={<span style={{ fontWeight: 600, color: '#595959' }}>{t('admin.overview.totalRevenue')}</span>}
+              value={stats?.paidRevenue ?? 0}
               precision={0}
               valueStyle={{ color: '#3f8600', fontWeight: 800, fontSize: 28 }}
               prefix={<DollarOutlined />}
@@ -199,7 +196,7 @@ const AdminOverview: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
             <Statistic
-              title={<span style={{ fontWeight: 600, color: '#595959' }}>Tổng số Booking</span>}
+              title={<span style={{ fontWeight: 600, color: '#595959' }}>{t('admin.overview.totalBookings')}</span>}
               value={stats?.totalBookings || 0}
               valueStyle={{ color: '#006ce4', fontWeight: 800, fontSize: 28 }}
               prefix={<BookOutlined />}
@@ -209,7 +206,7 @@ const AdminOverview: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
             <Statistic
-              title={<span style={{ fontWeight: 600, color: '#595959' }}>Booking chờ duyệt</span>}
+              title={<span style={{ fontWeight: 600, color: '#595959' }}>{t('admin.overview.pendingBookings')}</span>}
               value={stats?.pendingBookings || 0}
               valueStyle={{ color: '#faad14', fontWeight: 800, fontSize: 28 }}
               prefix={<ReconciliationOutlined />}
@@ -219,7 +216,7 @@ const AdminOverview: React.FC = () => {
         <Col xs={24} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}>
             <Statistic
-              title={<span style={{ fontWeight: 600, color: '#595959' }}>Yêu cầu cần xử lý</span>}
+              title={<span style={{ fontWeight: 600, color: '#595959' }}>{t('admin.overview.pendingRequests')}</span>}
               value={stats?.pendingRequests || 0}
               valueStyle={{ color: '#cf1322', fontWeight: 800, fontSize: 28 }}
               prefix={<UserOutlined />}
@@ -233,11 +230,11 @@ const AdminOverview: React.FC = () => {
           <Card 
             bordered={false} 
             style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
-            title={<span style={{ fontSize: 16, fontWeight: 700 }}>Biểu đồ Doanh thu (6 tháng gần nhất)</span>}
+            title={<span style={{ fontSize: 16, fontWeight: 700 }}>{t('admin.overview.revenueChart')}</span>}
           >
             <div style={{ width: '100%', height: 300 }}>
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <AreaChart data={chartRows} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#1890ff" stopOpacity={0.3}/>
@@ -261,7 +258,7 @@ const AdminOverview: React.FC = () => {
           <Card 
             bordered={false} 
             style={{ borderRadius: 12, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
-            title={<span style={{ fontSize: 16, fontWeight: 700 }}>Tỉ lệ Đặt phòng</span>}
+            title={<span style={{ fontSize: 16, fontWeight: 700 }}>{t('admin.overview.bookingRatio')}</span>}
           >
             <div style={{ width: '100%', height: 300, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <ResponsiveContainer width="100%" height="100%">

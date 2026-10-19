@@ -10,7 +10,6 @@ import {
   Room,
   User,
 } from './api-generated';
-import { getErrorMessage } from './utils/errors';
 import i18n from './i18n';
 
 // ─── Khởi tạo Swagger client ──────────────────────────────────
@@ -86,14 +85,11 @@ export type AdminOverview = Record<string, number>;
 const JSON_FMT = { format: 'json' as const };
 const TEXT_FMT = { format: 'text' as const };
 
-/** Returns the response body; rejects with an Error carrying the backend's message. */
-const unwrap = <T>(request: Promise<AxiosResponse<T>>, fallbackMessage: string): Promise<T> =>
-  request.then(
-    res => res.data,
-    (error: unknown) => {
-      throw new Error(getErrorMessage(error, fallbackMessage));
-    },
-  );
+/**
+ * Returns the response body. Errors propagate unchanged so callers keep the HTTP status and error code,
+ * and show the backend's translated message or their own translated fallback via getErrorMessage.
+ */
+const unwrap = <T>(request: Promise<AxiosResponse<T>>): Promise<T> => request.then(res => res.data);
 
 // ─── AUTH ─────────────────────────────────────────────────────
 export const authApi = {
@@ -110,24 +106,21 @@ export const authApi = {
     unwrap(
       swaggerApi.request<string>({
         path: '/auth/google', method: 'POST', body: { credential }, type: ContentType.Json, ...TEXT_FMT,
-      }),
-      'Đăng nhập Google thất bại',
+      })
     ),
 
   forgotPassword: (username: string) =>
     unwrap(
       swaggerApi.request<string>({
         path: '/auth/forgot-password', method: 'POST', body: { username }, type: ContentType.Json, ...TEXT_FMT,
-      }),
-      'Không thể gửi mã xác nhận',
+      })
     ),
 
   resetPassword: (username: string, otp: string, newPassword: string) =>
     unwrap(
       swaggerApi.request<string>({
         path: '/auth/reset-password', method: 'POST', body: { username, otp, newPassword }, type: ContentType.Json, ...TEXT_FMT,
-      }),
-      'Đặt lại mật khẩu thất bại',
+      })
     ),
 };
 
@@ -136,8 +129,7 @@ export const chatApi = {
     unwrap(
       swaggerApi.request<ChatReply>({
         path: '/api/chat', method: 'POST', body: { messages, hotelInfo }, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Lỗi kết nối tới trợ lý AI',
+      })
     ),
 };
 
@@ -151,37 +143,32 @@ export const userApi = {
 
   getMe: () =>
     unwrap(
-      swaggerApi.request<UserProfile>({ path: '/users/me', method: 'GET', secure: true, ...JSON_FMT }),
-      'Không thể tải hồ sơ',
+      swaggerApi.request<UserProfile>({ path: '/users/me', method: 'GET', secure: true, ...JSON_FMT })
     ),
   updateMe: (data: UpdateProfilePayload) =>
     unwrap(
       swaggerApi.request<UserProfile>({
         path: '/users/me', method: 'PUT', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Cập nhật thất bại',
+      })
     ),
   uploadAvatar: (file: File) =>
     unwrap(
       swaggerApi.request<UserProfile>({
         path: '/users/me/avatar', method: 'POST', body: { file }, secure: true, type: ContentType.FormData, ...JSON_FMT,
-      }),
-      'Tải ảnh đại diện thất bại',
+      })
     ),
   /** Sends an OTP to the new address; resolves with the masked address. */
   requestEmailChange: (email: string) =>
     unwrap(
       swaggerApi.request<string>({
         path: '/users/me/email/otp', method: 'POST', body: { email }, secure: true, type: ContentType.Json, ...TEXT_FMT,
-      }),
-      'Không thể gửi mã xác nhận',
+      })
     ),
   confirmEmailChange: (email: string, otp: string) =>
     unwrap(
       swaggerApi.request<User>({
         path: '/users/me/email', method: 'PUT', body: { email, otp }, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Xác nhận đổi email thất bại',
+      })
     ),
 };
 
@@ -204,8 +191,7 @@ export const roomApi = {
     unwrap(
       swaggerApi.request<Room>({
         path: `/rooms/${id}`, method: 'PUT', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Lỗi khi cập nhật phòng',
+      })
     ),
   delete: (id: number) => swaggerApi.rooms.delete2(id, JSON_FMT),
 };
@@ -220,8 +206,7 @@ export const bookingApi = {
   /** PDF invoice of one of the user's paid bookings. */
   downloadInvoice: (bookingId: number) =>
     unwrap(
-      swaggerApi.request<Blob>({ path: `/bookings/${bookingId}/invoice`, method: 'GET', secure: true, format: 'blob' }),
-      'Không thể tải hóa đơn',
+      swaggerApi.request<Blob>({ path: `/bookings/${bookingId}/invoice`, method: 'GET', secure: true, format: 'blob' })
     ),
   cancel: (bookingId: number) => swaggerApi.bookings.cancelBooking(bookingId, JSON_FMT),
   createRequest: (bookingId: number, data: CreateBookingRequestDto) =>
@@ -236,15 +221,13 @@ export const paymentApi = {
     unwrap(
       swaggerApi.request<PaymentQr>({
         path: `/bookings/${bookingId}/payment-qr`, method: 'GET', secure: true, ...JSON_FMT,
-      }),
-      'Lỗi lấy QR',
+      })
     ),
   confirmPayment: (bookingId: number) =>
     unwrap(
       swaggerApi.request<Booking>({
         path: `/bookings/${bookingId}/confirm-payment`, method: 'POST', secure: true, ...JSON_FMT,
-      }),
-      'Lỗi xác nhận',
+      })
     ),
 };
 
@@ -255,8 +238,7 @@ export const notificationApi = {
     swaggerApi.notifications.markAsRead(notificationId, JSON_FMT),
   delete: (notificationId: number) =>
     unwrap(
-      swaggerApi.request<void>({ path: `/notifications/${notificationId}`, method: 'DELETE', secure: true }),
-      'Không thể xóa thông báo',
+      swaggerApi.request<void>({ path: `/notifications/${notificationId}`, method: 'DELETE', secure: true })
     ),
 };
 
@@ -288,22 +270,19 @@ export const adminApi = {
     unwrap(
       swaggerApi.request<ReviewPage>({
         path: '/admin/reviews', method: 'GET', query: { page, size, unanswered }, secure: true, ...JSON_FMT,
-      }),
-      'Không thể tải danh sách đánh giá',
+      })
     ),
   replyReview: (reviewId: number, reply: string) =>
     unwrap(
       swaggerApi.request<ReviewItem>({
         path: `/admin/reviews/${reviewId}/reply`, method: 'PUT', body: { reply }, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Gửi phản hồi thất bại',
+      })
     ),
   removeReviewReply: (reviewId: number) =>
     unwrap(
       swaggerApi.request<ReviewItem>({
         path: `/admin/reviews/${reviewId}/reply`, method: 'DELETE', secure: true, ...JSON_FMT,
-      }),
-      'Xóa phản hồi thất bại',
+      })
     ),
 
   // Thống kê & Báo cáo
@@ -311,8 +290,7 @@ export const adminApi = {
     swaggerApi.request<AdminOverview>({ path: '/admin/statistics/overview', method: 'GET', secure: true, ...JSON_FMT }),
   exportBookingsExcel: () =>
     unwrap(
-      swaggerApi.request<Blob>({ path: '/admin/reports/bookings.xlsx', method: 'GET', secure: true, format: 'blob' }),
-      'Có lỗi xảy ra khi xuất báo cáo',
+      swaggerApi.request<Blob>({ path: '/admin/reports/bookings.xlsx', method: 'GET', secure: true, format: 'blob' })
     ),
 };
 
@@ -361,8 +339,7 @@ export const reviewApi = {
     unwrap(
       swaggerApi.request<ReviewItem>({
         path: '/api/reviews', method: 'POST', body: data, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Gửi đánh giá thất bại',
+      })
     ),
 };
 
@@ -371,30 +348,25 @@ export const reviewApi = {
 export const wishlistApi = {
   get: () =>
     unwrap(
-      swaggerApi.request<number[]>({ path: '/wishlist', method: 'GET', secure: true, ...JSON_FMT }),
-      'Không thể tải danh sách yêu thích',
+      swaggerApi.request<number[]>({ path: '/wishlist', method: 'GET', secure: true, ...JSON_FMT })
     ),
   add: (hotelId: number) =>
     unwrap(
-      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'PUT', secure: true, ...JSON_FMT }),
-      'Không thể thêm vào yêu thích',
+      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'PUT', secure: true, ...JSON_FMT })
     ),
   remove: (hotelId: number) =>
     unwrap(
-      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'DELETE', secure: true, ...JSON_FMT }),
-      'Không thể xóa khỏi yêu thích',
+      swaggerApi.request<number[]>({ path: `/wishlist/${hotelId}`, method: 'DELETE', secure: true, ...JSON_FMT })
     ),
   clear: () =>
     unwrap(
-      swaggerApi.request<void>({ path: '/wishlist', method: 'DELETE', secure: true }),
-      'Không thể xóa danh sách yêu thích',
+      swaggerApi.request<void>({ path: '/wishlist', method: 'DELETE', secure: true })
     ),
   merge: (hotelIds: number[]) =>
     unwrap(
       swaggerApi.request<number[]>({
         path: '/wishlist/merge', method: 'POST', body: hotelIds, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Không thể đồng bộ danh sách yêu thích',
+      })
     ),
 };
 
@@ -426,52 +398,44 @@ export interface ChatRoomSummary {
 export const supportChatApi = {
   getMine: () =>
     unwrap(
-      swaggerApi.request<SupportChatHistory>({ path: '/api/support-chat/me', method: 'GET', secure: true, ...JSON_FMT }),
-      'Không thể tải cuộc trò chuyện',
+      swaggerApi.request<SupportChatHistory>({ path: '/api/support-chat/me', method: 'GET', secure: true, ...JSON_FMT })
     ),
   send: (content: string) =>
     unwrap(
       swaggerApi.request<ChatMessageItem>({
         path: '/api/support-chat/me/messages', method: 'POST', body: { content }, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Gửi tin nhắn thất bại',
+      })
     ),
   markRead: () =>
     unwrap(
-      swaggerApi.request<void>({ path: '/api/support-chat/me/read', method: 'POST', secure: true }),
-      'Không thể cập nhật trạng thái đã đọc',
+      swaggerApi.request<void>({ path: '/api/support-chat/me/read', method: 'POST', secure: true })
     ),
   unreadCount: () =>
     unwrap(
-      swaggerApi.request<{ count: number }>({ path: '/api/support-chat/me/unread-count', method: 'GET', secure: true, ...JSON_FMT }),
-      'Không thể tải số tin chưa đọc',
+      swaggerApi.request<{ count: number }>({ path: '/api/support-chat/me/unread-count', method: 'GET', secure: true, ...JSON_FMT })
     ),
 };
 
 export const adminSupportChatApi = {
   rooms: () =>
     unwrap(
-      swaggerApi.request<ChatRoomSummary[]>({ path: '/admin/support-chat/rooms', method: 'GET', secure: true, ...JSON_FMT }),
-      'Không thể tải danh sách hội thoại',
+      swaggerApi.request<ChatRoomSummary[]>({ path: '/admin/support-chat/rooms', method: 'GET', secure: true, ...JSON_FMT })
     ),
   messages: (roomId: number) =>
     unwrap(
       swaggerApi.request<ChatMessageItem[]>({
         path: `/admin/support-chat/rooms/${roomId}/messages`, method: 'GET', secure: true, ...JSON_FMT,
-      }),
-      'Không thể tải tin nhắn',
+      })
     ),
   reply: (roomId: number, content: string) =>
     unwrap(
       swaggerApi.request<ChatMessageItem>({
         path: `/admin/support-chat/rooms/${roomId}/messages`, method: 'POST', body: { content }, secure: true, type: ContentType.Json, ...JSON_FMT,
-      }),
-      'Gửi tin nhắn thất bại',
+      })
     ),
   markRead: (roomId: number) =>
     unwrap(
-      swaggerApi.request<void>({ path: `/admin/support-chat/rooms/${roomId}/read`, method: 'POST', secure: true }),
-      'Không thể cập nhật trạng thái đã đọc',
+      swaggerApi.request<void>({ path: `/admin/support-chat/rooms/${roomId}/read`, method: 'POST', secure: true })
     ),
 };
 

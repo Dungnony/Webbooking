@@ -87,11 +87,10 @@ public class ReviewService {
         Review saved = repository.save(review);
 
         if (saved.getUser() != null) {
-            String hotelName = saved.getHotel() == null ? "" : " " + saved.getHotel().getName();
+            String hotelName = saved.getHotel() == null ? "" : saved.getHotel().getName();
             notificationService.create(
                     saved.getUser(),
-                    "Hotel replied to your review",
-                    "Khách sạn" + hotelName + " đã phản hồi đánh giá của bạn.");
+                    "notification.reviewReplied.title", "notification.reviewReplied.body", hotelName);
         }
         return ReviewResponse.from(saved);
     }

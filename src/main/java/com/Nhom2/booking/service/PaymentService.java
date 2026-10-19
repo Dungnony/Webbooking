@@ -147,12 +147,8 @@ public class PaymentService {
 
         // Thông báo cho admin kiểm tra thanh toán
         notificationService.notifyAdmins(
-                "Payment notification",
-                "User " + user.getUsername()
-                        + " has transferred payment for booking #" + bookingId
-                        + ". Amount: " + String.format("%,.0f", booking.getTotalPrice())
-                        + " VND. Please verify and confirm."
-        );
+                "notification.paymentReported.title", "notification.paymentReported.body",
+                user.getUsername(), bookingId, String.format("%,.0f", booking.getTotalPrice()));
 
         return booking;
     }
@@ -248,10 +244,8 @@ public class PaymentService {
                     bookingId, booking.getStatus(), receivedAmount);
             // Money arrived after the booking expired or was cancelled: someone has to refund it.
             notificationService.notifyAdmins(
-                    "Payment for inactive booking",
-                    "Booking #" + bookingId + " is " + booking.getStatus()
-                            + " but received " + String.format("%,d", receivedAmount) + " VND."
-                            + " Please refund or restore the booking manually.");
+                    "notification.paymentInactiveBooking.title", "notification.paymentInactiveBooking.body",
+                    bookingId, booking.getStatus(), String.format("%,d", receivedAmount));
             return false;
         }
 
@@ -269,12 +263,8 @@ public class PaymentService {
 
             // Vẫn thông báo admin để xử lý thủ công
             notificationService.notifyAdmins(
-                    "⚠️ Insufficient payment",
-                    "Booking #" + bookingId
-                            + " received " + String.format("%,d", receivedAmount) + " VND"
-                            + " but expected " + String.format("%,d", expectedAmount) + " VND."
-                            + " Please verify manually."
-            );
+                    "notification.paymentInsufficient.title", "notification.paymentInsufficient.body",
+                    bookingId, String.format("%,d", receivedAmount), String.format("%,d", expectedAmount));
             return false;
         }
 
@@ -289,19 +279,13 @@ public class PaymentService {
         // Thông báo cho user
         notificationService.create(
                 booking.getUser(),
-                "✅ Payment confirmed",
-                "Your payment of " + String.format("%,d", receivedAmount)
-                        + " VND for booking #" + bookingId
-                        + " has been automatically confirmed. Thank you!"
-        );
+                "notification.paymentAutoConfirmed.title", "notification.paymentAutoConfirmed.body",
+                String.format("%,d", receivedAmount), bookingId);
 
         // Thông báo cho admin
         notificationService.notifyAdmins(
-                "✅ Auto payment confirmed",
-                "Booking #" + bookingId
-                        + " payment auto-confirmed via bank transfer."
-                        + " Amount: " + String.format("%,d", receivedAmount) + " VND."
-        );
+                "notification.paymentAutoConfirmedAdmin.title", "notification.paymentAutoConfirmedAdmin.body",
+                bookingId, String.format("%,d", receivedAmount));
 
         return true;
     }

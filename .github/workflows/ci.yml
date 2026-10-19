@@ -23,7 +23,7 @@ jobs:
           ./mvnw -B test "-Dtest=!BackendcuoikyApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false
 
   frontend:
-    name: Frontend lint and build
+    name: Frontend lint, test and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,4 +37,5 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
+      - run: npm test
       - run: npm run build

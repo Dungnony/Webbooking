@@ -229,7 +229,8 @@ class ReviewServiceTest {
 
         assertThat(result.hotelReply()).isEqualTo("Cảm ơn bạn đã góp ý!");
         assertThat(result.hotelRepliedAt()).isNotNull();
-        verify(notificationService).create(eq(author), any(), any());
+        verify(notificationService).create(
+                eq(author), eq("notification.reviewReplied.title"), eq("notification.reviewReplied.body"), any());
     }
 
     @Test

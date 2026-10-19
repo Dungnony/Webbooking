@@ -1,5 +1,7 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.dto.UpdateProfileRequest;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
@@ -43,7 +45,9 @@ class UserServiceProfileTest {
                 mock(OtpService.class),
                 passwordEncoder,
                 mock(GoogleTokenVerifier.class),
-                new RateLimiter(Clock.systemUTC()));
+                new RateLimiter(Clock.systemUTC()),
+                new PendingRegistrations(Clock.systemUTC()),
+                new Messages(LocaleConfig.createMessageSource()));
 
         existing = new User();
         existing.setId(5L);

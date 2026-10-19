@@ -1,27 +1,38 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.BookingRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Locale;
 
 @Service
 public class InvoiceService {
 
     static final String PDF_CONTENT_TYPE = "application/pdf";
+    private static final String BILINGUAL_BODY_SEPARATOR = "\n\n--------------------\n\n";
 
     private final BookingRepository bookingRepository;
     private final InvoicePdfGenerator pdfGenerator;
     private final MailService mailService;
+    private final Messages messages;
 
-    public InvoiceService(BookingRepository bookingRepository, InvoicePdfGenerator pdfGenerator, MailService mailService) {
+    public InvoiceService(
+            BookingRepository bookingRepository,
+            InvoicePdfGenerator pdfGenerator,
+            MailService mailService,
+            Messages messages) {
         this.bookingRepository = bookingRepository;
         this.pdfGenerator = pdfGenerator;
         this.mailService = mailService;
+        this.messages = messages;
     }
 
     /** Lets the guest download the invoice of their own paid booking again. */
@@ -34,21 +45,28 @@ public class InvoiceService {
         return pdfGenerator.generate(booking);
     }
 
-    // Read-only transaction so the lazy room lines are still loadable when this runs on the async listener thread.
+    /**
+     * Sent from a background thread after a webhook or an admin action, so the guest's UI language is unknown;
+     * like the PDF, the mail is written in both Vietnamese and English.
+     * Read-only transaction so the lazy room lines are still loadable on the async listener thread.
+     */
     @Transactional(readOnly = true)
     public void emailInvoice(Long bookingId) {
         Booking booking = getPaidBooking(bookingId);
+        Object[] args = {booking.getUser().getUsername(), String.valueOf(bookingId), booking.getHotel().getName()};
         mailService.sendMailWithAttachment(
                 booking.getUser().getEmail(),
-                "Xác nhận đặt phòng #" + bookingId + " - Booking Nhóm 2",
-                "Xin chào " + booking.getUser().getUsername() + ",\n\n"
-                        + "Chúng tôi đã nhận được thanh toán cho đơn #" + bookingId + " tại "
-                        + booking.getHotel().getName() + ".\n"
-                        + "Hóa đơn chi tiết được đính kèm trong email này.\n\n"
-                        + "Cảm ơn bạn đã đặt phòng!",
+                bilingual("mail.invoice.subject", " / ", args),
+                bilingual("mail.invoice.body", BILINGUAL_BODY_SEPARATOR, args),
                 fileName(bookingId),
                 pdfGenerator.generate(booking),
                 PDF_CONTENT_TYPE);
+    }
+
+    private String bilingual(String code, String separator, Object... args) {
+        return messages.forLocale(LocaleConfig.DEFAULT_LOCALE, code, args)
+                + separator
+                + messages.forLocale(Locale.ENGLISH, code, args);
     }
 
     public static String fileName(Long bookingId) {

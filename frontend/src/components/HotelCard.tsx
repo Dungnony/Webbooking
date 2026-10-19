@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { getHotelImage } from '../utils/imageUtils';
+import { lowestRoomPrice, ratingLabelKey } from '../utils/hotelDisplay';
 import type { HotelWithStats } from '../api';
 
 interface HotelCardProps {
@@ -23,11 +24,10 @@ const HotelCard: React.FC<HotelCardProps> = ({
   const { t } = useTranslation();
   const rating = hotel.ratingAvg ?? 0;
   // Lấy giá từ backend, không tự sinh giá
-  const price = estimatedPrice ?? hotel.rooms?.[0]?.pricePerNight;
+  const price = estimatedPrice ?? lowestRoomPrice(hotel);
   const imgUrl = getHotelImage(hotel) || 'https://images.unsplash.com/photo-1542314831-c6a4d1409e15?auto=format&fit=crop&q=80&w=1000'; // fallback đẹp
-  
-  const ratingKey = rating >= 9 ? 'exceptional' : rating >= 8.5 ? 'superb' : rating >= 8 ? 'veryGood' : rating > 0 ? 'good' : 'none';
-  const ratingLabel = t(`common.rating.${ratingKey}`);
+
+  const ratingLabel = t(`common.rating.${ratingLabelKey(rating)}`);
 
   const [imageError, setImageError] = React.useState(false);
 

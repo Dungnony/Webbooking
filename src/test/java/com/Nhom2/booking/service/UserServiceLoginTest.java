@@ -1,5 +1,7 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.dto.LoginRequest;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
@@ -49,7 +51,9 @@ class UserServiceLoginTest {
         googleTokenVerifier = mock(GoogleTokenVerifier.class);
         userService = new UserService(
                 userRepository, jwtUtil, mailService, mock(OtpService.class), passwordEncoder, googleTokenVerifier,
-                new RateLimiter(Clock.systemUTC()));
+                new RateLimiter(Clock.systemUTC()),
+                new PendingRegistrations(Clock.systemUTC()),
+                new Messages(LocaleConfig.createMessageSource()));
 
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(jwtUtil.generateToken(anyString(), any(UserRole.class)))

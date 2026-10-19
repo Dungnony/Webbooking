@@ -9,6 +9,7 @@ import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.exception.UnauthorizedException;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
@@ -22,9 +23,7 @@ import org.springframework.stereotype.Service;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.Locale;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 @Service
@@ -47,7 +46,6 @@ public class UserService {
     static final int MAX_FAILED_LOGINS = 5;
     static final int MAX_OTP_REQUESTS = 3;
     private static final Duration LIMIT_WINDOW = Duration.ofMinutes(15);
-    private final Map<String, RegisterRequest> pendingUsers = new HashMap<>();
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final MailService mailService;
@@ -55,6 +53,8 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final GoogleTokenVerifier googleTokenVerifier;
     private final RateLimiter rateLimiter;
+    private final PendingRegistrations pendingRegistrations;
+    private final Messages messages;
 
     public UserService(
             UserRepository userRepository,
@@ -63,7 +63,9 @@ public class UserService {
             OtpService otpService,
             PasswordEncoder passwordEncoder,
             GoogleTokenVerifier googleTokenVerifier,
-            RateLimiter rateLimiter
+            RateLimiter rateLimiter,
+            PendingRegistrations pendingRegistrations,
+            Messages messages
     ) {
         this.userRepository = userRepository;
         this.jwtUtil = jwtUtil;
@@ -72,6 +74,8 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
         this.googleTokenVerifier = googleTokenVerifier;
         this.rateLimiter = rateLimiter;
+        this.pendingRegistrations = pendingRegistrations;
+        this.messages = messages;
     }
     // GET ALL
     public List<User> getAll() {
@@ -125,11 +129,8 @@ public class UserService {
         String otp = otpService.generateOtp(emailChangeOtpKey(username, email));
         mailService.sendMail(
                 email,
-                "Xác nhận đổi email - Booking.com",
-                "Xin chào " + user.getUsername() + ",\n\n"
-                        + "Mã OTP để xác nhận email mới của bạn là: " + otp + "\n\n"
-                        + "Nếu bạn không yêu cầu đổi email, vui lòng bỏ qua email này."
-        );
+                messages.get("mail.emailChangeOtp.subject"),
+                messages.get("mail.emailChangeOtp.body", user.getUsername(), otp, OtpService.OTP_TTL.toMinutes()));
         return maskEmail(email);
     }
 
@@ -224,15 +225,14 @@ public class UserService {
         if (isEmailTakenByOther(email, null)) {
             throw new BusinessException(EMAIL_EXISTS);
         }
-        request.setEmail(email);
         limitOtpRequests("otp-register:" + email.toLowerCase(Locale.ROOT));
+        pendingRegistrations.put(new PendingRegistrations.Registration(
+                request.getUsername(), email, passwordEncoder.encode(request.getPassword())));
         String otp = otpService.generateOtp(email);
-        pendingUsers.put(email, request);
         mailService.sendMail(
                 email,
-                "Xác nhận đăng ký tài khoản",
-                "Mã OTP của bạn là: " + otp
-        );
+                messages.get("mail.registerOtp.subject"),
+                messages.get("mail.registerOtp.body", otp, OtpService.OTP_TTL.toMinutes()));
         return "OTP sent to email";
     }
     //verify otp
@@ -241,22 +241,19 @@ public class UserService {
         if (!otpService.verifyOtp(email, otp)) {
             throw new BusinessException(OTP_INVALID);
         }
-        RegisterRequest request = pendingUsers.get(email);
-        if (request == null) {
-            throw new BusinessException("error.registration.notFound");
-        }
+        PendingRegistrations.Registration registration = pendingRegistrations.take(email)
+                .orElseThrow(() -> new BusinessException("error.registration.notFound"));
         // Re-checked because Google login or an email change may have claimed the address since the OTP was sent.
         if (isEmailTakenByOther(email, null)) {
             throw new BusinessException(EMAIL_EXISTS);
         }
         User user = new User();
-        user.setUsername(request.getUsername());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setEmail(request.getEmail());
+        user.setUsername(registration.username());
+        user.setPassword(registration.passwordHash());
+        user.setEmail(registration.email());
         user.setRole(UserRole.USER);
         userRepository.save(user);
         otpService.removeOtp(email);
-        pendingUsers.remove(email);
         return "Register success";
     }
     // LOGIN
@@ -288,9 +285,8 @@ public class UserService {
         }
         sendNoticeMail(
                 user.getEmail(),
-                "Đăng nhập thành công",
-                "Xin chào " + user.getUsername() + ", bạn vừa đăng nhập vào hệ thống."
-        );
+                messages.get("mail.loginNotice.subject"),
+                messages.get("mail.loginNotice.body", user.getUsername()));
         return jwtUtil.generateToken(user.getUsername(), user.getRole());
     }
 
@@ -315,12 +311,8 @@ public class UserService {
 
         mailService.sendMail(
                 email,
-                "Đặt lại mật khẩu - Booking.com",
-                "Xin chào " + user.getUsername() + ",\n\n"
-                        + "Mã OTP để đặt lại mật khẩu của bạn là: " + otp + "\n\n"
-                        + "Mã này có hiệu lực trong vòng 5 phút.\n"
-                        + "Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này."
-        );
+                messages.get("mail.passwordResetOtp.subject"),
+                messages.get("mail.passwordResetOtp.body", user.getUsername(), otp, OtpService.OTP_TTL.toMinutes()));
 
         return maskEmail(email);
     }
@@ -359,11 +351,8 @@ public class UserService {
         // Gửi mail thông báo
         mailService.sendMail(
                 user.getEmail(),
-                "Mật khẩu đã được thay đổi - Booking.com",
-                "Xin chào " + user.getUsername() + ",\n\n"
-                        + "Mật khẩu của bạn đã được thay đổi thành công.\n"
-                        + "Nếu bạn không thực hiện thay đổi này, vui lòng liên hệ hỗ trợ ngay."
-        );
+                messages.get("mail.passwordChanged.subject"),
+                messages.get("mail.passwordChanged.body", user.getUsername()));
 
         return "Đặt lại mật khẩu thành công";
     }
@@ -431,9 +420,8 @@ public class UserService {
 
         sendNoticeMail(
                 user.getEmail(),
-                "Đăng nhập bằng Google thành công",
-                "Xin chào " + user.getUsername() + ", bạn vừa đăng nhập vào hệ thống bằng Google."
-        );
+                messages.get("mail.googleLoginNotice.subject"),
+                messages.get("mail.googleLoginNotice.body", user.getUsername()));
 
         return jwtUtil.generateToken(user.getUsername(), user.getRole());
     }

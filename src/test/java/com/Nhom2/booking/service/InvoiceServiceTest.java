@@ -1,12 +1,15 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.BookingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
 
@@ -36,7 +39,8 @@ class InvoiceServiceTest {
         bookingRepository = mock(BookingRepository.class);
         pdfGenerator = mock(InvoicePdfGenerator.class);
         mailService = mock(MailService.class);
-        invoiceService = new InvoiceService(bookingRepository, pdfGenerator, mailService);
+        invoiceService = new InvoiceService(
+                bookingRepository, pdfGenerator, mailService, new Messages(LocaleConfig.createMessageSource()));
 
         booking = InvoicePdfGeneratorTest.sampleBooking();
         when(bookingRepository.findById(42L)).thenReturn(Optional.of(booking));
@@ -82,5 +86,17 @@ class InvoiceServiceTest {
                 eq("hoa-don-42.pdf"),
                 eq(PDF),
                 eq("application/pdf"));
+    }
+
+    @Test
+    void invoiceMailIsWrittenInVietnameseAndEnglishBecauseTheGuestLanguageIsUnknown() {
+        invoiceService.emailInvoice(42L);
+
+        ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
+        verify(mailService).sendMailWithAttachment(
+                anyString(), subject.capture(), body.capture(), anyString(), any(), anyString());
+        assertThat(subject.getValue()).contains("Xác nhận đặt phòng #42").contains("Booking confirmation #42");
+        assertThat(body.getValue()).contains("Xin chào alice").contains("Hello alice");
     }
 }

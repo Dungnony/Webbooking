@@ -127,8 +127,7 @@ public class BookingService {
 
         Booking result = bookingRepository.save(savedBooking);
         notificationService.notifyAdmins(
-                "New booking",
-                "Booking #" + result.getId() + " is waiting for approval");
+                "notification.newBooking.title", "notification.newBooking.body", result.getId());
 
         return result;
     }
@@ -163,8 +162,8 @@ public class BookingService {
         Booking result = bookingRepository.save(booking);
 
         notificationService.notifyAdmins(
-                "Booking cancelled",
-                "User " + user.getUsername() + " cancelled booking #" + booking.getId());
+                "notification.bookingCancelled.title", "notification.bookingCancelled.body",
+                user.getUsername(), booking.getId());
 
         return result;
     }
@@ -195,8 +194,7 @@ public class BookingService {
 
         notificationService.create(
                 booking.getUser(),
-                "Booking approved",
-                "Your booking #" + booking.getId() + " has been approved");
+                "notification.bookingApproved.title", "notification.bookingApproved.body", booking.getId());
 
         return result;
     }
@@ -213,12 +211,9 @@ public class BookingService {
         booking.setStatus(BookingStatus.REJECTED);
         Booking result = bookingRepository.save(booking);
 
-        notificationService.create(
-                booking.getUser(),
-                "Booking rejected",
-                response == null || response.isBlank()
-                        ? "Your booking #" + booking.getId() + " has been rejected"
-                        : response);
+        notifyWithOptionalResponse(
+                booking.getUser(), response,
+                "notification.bookingRejected.title", "notification.bookingRejected.body", booking.getId());
 
         return result;
     }
@@ -238,8 +233,7 @@ public class BookingService {
 
         notificationService.create(
                 booking.getUser(),
-                "Payment confirmed",
-                "Payment for booking #" + booking.getId() + " has been confirmed");
+                "notification.paymentConfirmed.title", "notification.paymentConfirmed.body", booking.getId());
 
         return result;
     }
@@ -280,9 +274,11 @@ public class BookingService {
         com.Nhom2.booking.entity.BookingRequest result = bookingRequestRepository.save(entity);
 
         notificationService.notifyAdmins(
-                "New booking request",
-                "User " + user.getUsername() + " sent " + request.getType()
-                        + " request for booking #" + booking.getId());
+                "notification.newRequest.title",
+                request.getType() == RequestType.CANCEL
+                        ? "notification.newRequest.cancelBody"
+                        : "notification.newRequest.changeDateBody",
+                user.getUsername(), booking.getId());
 
         return result;
     }
@@ -344,12 +340,9 @@ public class BookingService {
 
         com.Nhom2.booking.entity.BookingRequest result = bookingRequestRepository.save(request);
 
-        notificationService.create(
-                booking.getUser(),
-                "Request approved",
-                response == null || response.isBlank()
-                        ? "Your request for booking #" + booking.getId() + " has been approved"
-                        : response);
+        notifyWithOptionalResponse(
+                booking.getUser(), response,
+                "notification.requestApproved.title", "notification.requestApproved.body", booking.getId());
 
         return result;
     }
@@ -370,15 +363,22 @@ public class BookingService {
 
         com.Nhom2.booking.entity.BookingRequest result = bookingRequestRepository.save(request);
 
-        notificationService.create(
-                request.getBooking().getUser(),
-                "Request rejected",
-                response == null || response.isBlank()
-                        ? "Your request for booking #" + request.getBooking().getId()
-                                + " has been rejected"
-                        : response);
+        notifyWithOptionalResponse(
+                request.getBooking().getUser(), response,
+                "notification.requestRejected.title", "notification.requestRejected.body",
+                request.getBooking().getId());
 
         return result;
+    }
+
+    /** The admin's own response, when given, replaces the standard message text. */
+    private void notifyWithOptionalResponse(
+            User user, String response, String titleKey, String messageKey, Object... args) {
+        if (response == null || response.isBlank()) {
+            notificationService.create(user, titleKey, messageKey, args);
+        } else {
+            notificationService.createWithMessage(user, titleKey, response);
+        }
     }
 
     private void validateBookingRequest(BookingRequest request) {

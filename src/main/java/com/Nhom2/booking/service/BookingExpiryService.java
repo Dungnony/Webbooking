@@ -59,9 +59,8 @@ public class BookingExpiryService {
             booking.setStatus(BookingStatus.CANCELLED);
             notificationService.create(
                     booking.getUser(),
-                    "Booking expired",
-                    "Your booking #" + booking.getId() + " was cancelled because it was not paid within "
-                            + PAYMENT_WINDOW.toMinutes() + " minutes");
+                    "notification.bookingExpired.title", "notification.bookingExpired.body",
+                    booking.getId(), PAYMENT_WINDOW.toMinutes());
         }
         bookingRepository.saveAll(expired);
 

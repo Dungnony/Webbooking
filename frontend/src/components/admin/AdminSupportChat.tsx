@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Badge, Button, Empty, Input, List, Spin, message as toast } from 'antd';
 import { SendOutlined, UserOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { adminSupportChatApi, ChatMessageItem, ChatRoomSummary } from '../../api';
+import i18n, { dateLocale } from '../../i18n';
 import { appendUnique, connectSupportChat } from '../../utils/supportChatSocket';
 import { getErrorMessage } from '../../utils/errors';
 
@@ -9,9 +11,10 @@ import { getErrorMessage } from '../../utils/errors';
 const MAX_MESSAGE_LENGTH = 2000;
 
 const formatTime = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '';
+  iso ? new Date(iso).toLocaleString(dateLocale(), { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '';
 
 const AdminSupportChat: React.FC = () => {
+  const { t } = useTranslation();
   const [rooms, setRooms] = useState<ChatRoomSummary[]>([]);
   const [loadingRooms, setLoadingRooms] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
@@ -32,7 +35,8 @@ const AdminSupportChat: React.FC = () => {
     try {
       setRooms(await adminSupportChatApi.rooms());
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Không thể tải danh sách hội thoại'));
+      // i18n.t keeps this callback stable, so switching language does not reconnect the socket.
+      toast.error(getErrorMessage(err, i18n.t('admin.chat.roomsLoadFailed')));
     } finally {
       setLoadingRooms(false);
     }
@@ -74,7 +78,7 @@ const AdminSupportChat: React.FC = () => {
     setLoadingMessages(true);
     adminSupportChatApi.messages(selectedRoomId)
       .then(setMessages)
-      .catch(err => toast.error(getErrorMessage(err, 'Không thể tải tin nhắn')))
+      .catch(err => toast.error(getErrorMessage(err, i18n.t('admin.chat.messagesLoadFailed'))))
       .finally(() => setLoadingMessages(false));
     adminSupportChatApi.markRead(selectedRoomId)
       .then(() => setRooms(prev => prev.map(r => (r.roomId === selectedRoomId ? { ...r, unreadCount: 0 } : r))))
@@ -94,7 +98,7 @@ const AdminSupportChat: React.FC = () => {
       setMessages(prev => appendUnique(prev, sent));
       setInput('');
     } catch (err) {
-      toast.error(getErrorMessage(err, 'Gửi tin nhắn thất bại'));
+      toast.error(getErrorMessage(err, t('supportChat.sendFailed')));
     } finally {
       setSending(false);
     }
@@ -104,13 +108,13 @@ const AdminSupportChat: React.FC = () => {
 
   return (
     <div>
-      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: '#1a1a1a' }}>Hỗ trợ khách hàng</h2>
+      <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 20, color: '#1a1a1a' }}>{t('admin.menu.chat')}</h2>
       <div style={{ display: 'flex', height: 'calc(100vh - 200px)', minHeight: 420, background: '#fff', borderRadius: 8, overflow: 'hidden', border: '1px solid #f0f0f0' }}>
         <div style={{ width: 280, borderRight: '1px solid #f0f0f0', overflowY: 'auto' }}>
           <List
             loading={loadingRooms}
             dataSource={rooms}
-            locale={{ emptyText: 'Chưa có cuộc trò chuyện nào' }}
+            locale={{ emptyText: t('admin.chat.empty') }}
             renderItem={room => (
               <List.Item
                 onClick={() => setSelectedRoomId(room.roomId)}
@@ -133,7 +137,7 @@ const AdminSupportChat: React.FC = () => {
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {selectedRoomId === null ? (
-            <div style={{ margin: 'auto' }}><Empty description="Chọn một cuộc trò chuyện" /></div>
+            <div style={{ margin: 'auto' }}><Empty description={t('admin.chat.selectRoom')} /></div>
           ) : (
             <>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0', fontWeight: 700 }}>
@@ -166,9 +170,9 @@ const AdminSupportChat: React.FC = () => {
                   onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   autoSize={{ minRows: 1, maxRows: 4 }}
                   maxLength={MAX_MESSAGE_LENGTH}
-                  placeholder="Trả lời khách..."
+                  placeholder={t('admin.chat.placeholder')}
                 />
-                <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={handleSend}>Gửi</Button>
+                <Button type="primary" icon={<SendOutlined />} loading={sending} onClick={handleSend}>{t('admin.chat.send')}</Button>
               </div>
             </>
           )}

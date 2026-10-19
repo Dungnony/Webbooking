@@ -23,7 +23,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const token = localStorage.getItem('token');
   const username = localStorage.getItem('username');
   const isAdmin = localStorage.getItem('role') === 'ADMIN';
@@ -62,13 +62,14 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
     }
   }, [token]);
 
+  // The backend translates notifications per request, so switching language refetches them.
   useEffect(() => {
     if (token) {
       fetchNotifications();
       const intervalId = setInterval(fetchNotifications, NOTIFICATION_POLL_INTERVAL_MS);
       return () => clearInterval(intervalId);
     }
-  }, [token, fetchNotifications]);
+  }, [token, fetchNotifications, i18n.language]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
 

@@ -1,47 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Table, Tag, Button, Empty, message, Modal, Form, Input, Select, Card } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { userApi } from '../../api';
+import { getErrorMessage } from '../../utils/errors';
 import type { User } from '../../api-generated';
 
 const AdminUsers: React.FC = () => {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm<User>();
 
-  const loadUsers = () => {
+  const loadUsers = useCallback(() => {
     setLoading(true);
     userApi.getAll()
       .then(res => {
         setUsers(res.data || []);
       })
       .catch((err) => {
-        message.error('Không thể lấy danh sách người dùng từ Server!');
+        message.error(t('admin.users.loadFailed'));
         console.error(err);
       })
       .finally(() => setLoading(false));
-  };
+  }, [t]);
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [loadUsers]);
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: 'Xác nhận xóa',
-      content: 'Bạn có chắc chắn muốn xóa người dùng này khỏi hệ thống không?',
-      okText: 'Xóa',
+      title: t('admin.users.deleteTitle'),
+      content: t('admin.users.deleteBody'),
+      okText: t('admin.common.delete'),
       okType: 'danger',
-      cancelText: 'Hủy',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await userApi.delete(id);
-          message.success('Đã xóa người dùng thành công!');
+          message.success(t('admin.users.deleted'));
           loadUsers();
         } catch (error) {
-          message.error('Không thể xóa người dùng.');
+          message.error(getErrorMessage(error, t('admin.users.deleteFailed')));
         }
       }
     });
@@ -64,24 +67,24 @@ const AdminUsers: React.FC = () => {
       if (editingUser?.id !== undefined) {
         const updated = { ...editingUser, ...values };
         await userApi.update(editingUser.id, updated);
-        message.success('Cập nhật người dùng thành công!');
+        message.success(t('admin.users.updated'));
       } else {
         await userApi.create(values);
-        message.success('Thêm người dùng mới thành công!');
+        message.success(t('admin.users.created'));
       }
       setIsModalOpen(false);
       loadUsers();
     } catch (error) {
-      message.error('Thao tác thất bại. Vui lòng thử lại.');
+      message.error(getErrorMessage(error, t('auth.genericFailed')));
     }
   };
 
   const columns = [
     { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },
-    { title: 'Tên đăng nhập', dataIndex: 'username', key: 'username', render: (v: string) => <b style={{ color: '#1a1a1a' }}>{v}</b> },
+    { title: t('auth.username'), dataIndex: 'username', key: 'username', render: (v: string) => <b style={{ color: '#1a1a1a' }}>{v}</b> },
     { title: 'Email', dataIndex: 'email', key: 'email' },
     {
-      title: 'Vai trò',
+      title: t('admin.users.role'),
       dataIndex: 'role',
       key: 'role',
       render: (v: string) => (
@@ -91,7 +94,7 @@ const AdminUsers: React.FC = () => {
       ),
     },
     {
-      title: 'Hành động',
+      title: t('admin.common.actions'),
       key: 'action',
       width: 180,
       render: (_: unknown, record: User) => {
@@ -99,8 +102,8 @@ const AdminUsers: React.FC = () => {
         if (record.username === 'admin' || userId === undefined) return null;
         return (
           <div style={{ display: 'flex', gap: 8 }}>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>Sửa</Button>
-            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(userId)}>Xóa</Button>
+            <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>{t('admin.common.edit')}</Button>
+            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(userId)}>{t('admin.common.delete')}</Button>
           </div>
         );
       }
@@ -110,9 +113,9 @@ const AdminUsers: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>Danh sách người dùng</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{t('admin.users.title')}</h2>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreateModal}>
-          Thêm tài khoản
+          {t('admin.users.add')}
         </Button>
       </div>
 
@@ -134,7 +137,7 @@ const AdminUsers: React.FC = () => {
           ))}
         </div>
       ) : users.length === 0 ? (
-        <Empty description="Không có tài khoản nào" />
+        <Empty description={t('admin.users.empty')} />
       ) : (
         <Card style={{ padding: 0 }} bodyStyle={{ padding: 0 }}>
           <Table
@@ -148,7 +151,7 @@ const AdminUsers: React.FC = () => {
       )}
 
       <Modal
-        title={editingUser ? 'Chỉnh sửa tài khoản' : 'Thêm tài khoản mới'}
+        title={editingUser ? t('admin.users.editTitle') : t('admin.users.createTitle')}
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
@@ -156,8 +159,8 @@ const AdminUsers: React.FC = () => {
         <Form form={form} layout="vertical" onFinish={handleModalSubmit} size="large" style={{ marginTop: 16 }}>
           <Form.Item
             name="username"
-            label="Tên đăng nhập"
-            rules={[{ required: true, message: 'Vui lòng nhập tên đăng nhập!' }]}
+            label={t('auth.username')}
+            rules={[{ required: true, message: t('auth.usernameRequired') }]}
           >
             <Input disabled={!!editingUser} />
           </Form.Item>
@@ -166,8 +169,8 @@ const AdminUsers: React.FC = () => {
             name="email"
             label="Email"
             rules={[
-              { required: true, message: 'Vui lòng nhập email!' },
-              { type: 'email', message: 'Email không đúng định dạng!' }
+              { required: true, message: t('auth.emailRequired') },
+              { type: 'email', message: t('auth.emailInvalid') }
             ]}
           >
             <Input />
@@ -176,8 +179,8 @@ const AdminUsers: React.FC = () => {
           {!editingUser && (
             <Form.Item
               name="password"
-              label="Mật khẩu"
-              rules={[{ required: true, message: 'Vui lòng nhập mật khẩu!' }]}
+              label={t('auth.password')}
+              rules={[{ required: true, message: t('auth.passwordRequired') }]}
             >
               <Input.Password />
             </Form.Item>
@@ -185,8 +188,8 @@ const AdminUsers: React.FC = () => {
 
           <Form.Item
             name="role"
-            label="Vai trò (Role)"
-            rules={[{ required: true, message: 'Vui lòng chọn vai trò!' }]}
+            label={t('admin.users.role')}
+            rules={[{ required: true, message: t('admin.users.roleRequired') }]}
             initialValue="USER"
           >
             <Select>
@@ -197,10 +200,10 @@ const AdminUsers: React.FC = () => {
 
           <Form.Item style={{ marginBottom: 0, textAlign: 'right', marginTop: 24 }}>
             <Button onClick={() => setIsModalOpen(false)} style={{ marginRight: 8 }}>
-              Hủy
+              {t('common.cancel')}
             </Button>
             <Button type="primary" htmlType="submit">
-              Xác nhận
+              {t('admin.common.confirm')}
             </Button>
           </Form.Item>
         </Form>

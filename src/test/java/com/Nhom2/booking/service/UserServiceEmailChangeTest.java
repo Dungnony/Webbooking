@@ -1,5 +1,7 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.config.LocaleConfig;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.repository.UserRepository;
@@ -51,7 +53,9 @@ class UserServiceEmailChangeTest {
                 new OtpService(),
                 mock(PasswordEncoder.class),
                 mock(GoogleTokenVerifier.class),
-                new RateLimiter(Clock.systemUTC()));
+                new RateLimiter(Clock.systemUTC()),
+                new PendingRegistrations(Clock.systemUTC()),
+                new Messages(LocaleConfig.createMessageSource()));
 
         alice = user(5L, "alice", "old@example.com");
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(alice));

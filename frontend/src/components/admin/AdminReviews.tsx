@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Table, Button, Modal, Input, Tag, Switch, Space, message, Typography } from 'antd';
 import { MessageOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { adminApi, ReviewItem } from '../../api';
+import { dateLocale } from '../../i18n';
 import { getErrorMessage } from '../../utils/errors';
 
 const { TextArea } = Input;
@@ -12,6 +14,7 @@ const PAGE_SIZE = 20;
 const MAX_REPLY_LENGTH = 2000;
 
 const AdminReviews: React.FC = () => {
+  const { t } = useTranslation();
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -29,11 +32,11 @@ const AdminReviews: React.FC = () => {
       setReviews(data.content);
       setTotal(data.totalElements);
     } catch (err) {
-      message.error(getErrorMessage(err, 'Không thể tải danh sách đánh giá'));
+      message.error(getErrorMessage(err, t('admin.reviews.loadFailed')));
     } finally {
       setLoading(false);
     }
-  }, [page, onlyUnanswered]);
+  }, [page, onlyUnanswered, t]);
 
   useEffect(() => { loadReviews(); }, [loadReviews]);
 
@@ -45,17 +48,17 @@ const AdminReviews: React.FC = () => {
   const handleSaveReply = async () => {
     if (!replyingTo) return;
     if (!replyText.trim()) {
-      message.warning('Vui lòng nhập nội dung phản hồi');
+      message.warning(t('admin.reviews.replyRequired'));
       return;
     }
     setSaving(true);
     try {
       await adminApi.replyReview(replyingTo.id, replyText.trim());
-      message.success('Đã gửi phản hồi');
+      message.success(t('admin.reviews.replied'));
       setReplyingTo(null);
       loadReviews();
     } catch (err) {
-      message.error(getErrorMessage(err, 'Gửi phản hồi thất bại'));
+      message.error(getErrorMessage(err, t('admin.reviews.replyFailed')));
     } finally {
       setSaving(false);
     }
@@ -63,58 +66,58 @@ const AdminReviews: React.FC = () => {
 
   const handleRemoveReply = (review: ReviewItem) => {
     Modal.confirm({
-      title: 'Xóa phản hồi?',
-      content: 'Phản hồi của khách sạn cho đánh giá này sẽ bị xóa.',
-      okText: 'Xóa',
+      title: t('admin.reviews.removeTitle'),
+      content: t('admin.reviews.removeBody'),
+      okText: t('admin.common.delete'),
       okType: 'danger',
-      cancelText: 'Hủy',
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await adminApi.removeReviewReply(review.id);
-          message.success('Đã xóa phản hồi');
+          message.success(t('admin.reviews.removed'));
           loadReviews();
         } catch (err) {
-          message.error(getErrorMessage(err, 'Xóa phản hồi thất bại'));
+          message.error(getErrorMessage(err, t('admin.reviews.removeFailed')));
         }
       },
     });
   };
 
   const columns = [
-    { title: 'Khách sạn', dataIndex: 'hotelName', key: 'hotelName', width: 180, render: (name?: string) => <b>{name || '—'}</b> },
-    { title: 'Khách', dataIndex: 'username', key: 'username', width: 120 },
-    { title: 'Điểm', dataIndex: 'rating', key: 'rating', width: 70, render: (r: number) => <Tag color={r >= 8 ? 'green' : r >= 5 ? 'gold' : 'red'}>{r}</Tag> },
+    { title: t('admin.common.hotel'), dataIndex: 'hotelName', key: 'hotelName', width: 180, render: (name?: string) => <b>{name || '—'}</b> },
+    { title: t('admin.common.guest'), dataIndex: 'username', key: 'username', width: 120 },
+    { title: t('admin.reviews.score'), dataIndex: 'rating', key: 'rating', width: 70, render: (r: number) => <Tag color={r >= 8 ? 'green' : r >= 5 ? 'gold' : 'red'}>{r}</Tag> },
     {
-      title: 'Nội dung',
+      title: t('admin.reviews.content'),
       key: 'content',
       render: (_: unknown, review: ReviewItem) => (
         <div>
-          <Paragraph ellipsis={{ rows: 3, expandable: true, symbol: 'Xem thêm' }} style={{ marginBottom: 4 }}>
-            {review.comment || <i style={{ color: '#999' }}>(không có nhận xét)</i>}
+          <Paragraph ellipsis={{ rows: 3, expandable: true, symbol: t('admin.reviews.more') }} style={{ marginBottom: 4 }}>
+            {review.comment || <i style={{ color: '#999' }}>{t('admin.reviews.noComment')}</i>}
           </Paragraph>
           {review.hotelReply && (
             <div style={{ background: '#f0f5ff', borderLeft: '3px solid #006ce4', padding: '6px 10px', fontSize: 13 }}>
-              <b>Phản hồi:</b> {review.hotelReply}
+              <b>{t('admin.reviews.reply')}:</b> {review.hotelReply}
             </div>
           )}
         </div>
       ),
     },
     {
-      title: 'Ngày',
+      title: t('admin.reviews.date'),
       dataIndex: 'createdAt',
       key: 'createdAt',
       width: 110,
-      render: (d?: string) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—'),
+      render: (d?: string) => (d ? new Date(d).toLocaleDateString(dateLocale()) : '—'),
     },
     {
-      title: 'Hành động',
+      title: t('admin.common.actions'),
       key: 'action',
       width: 150,
       render: (_: unknown, review: ReviewItem) => (
         <Space>
           <Button size="small" type="primary" icon={<MessageOutlined />} onClick={() => openReply(review)}>
-            {review.hotelReply ? 'Sửa' : 'Trả lời'}
+            {review.hotelReply ? t('admin.common.edit') : t('admin.reviews.answer')}
           </Button>
           {review.hotelReply && (
             <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleRemoveReply(review)} />
@@ -127,9 +130,9 @@ const AdminReviews: React.FC = () => {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>Đánh giá của khách</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0, color: '#1a1a1a' }}>{t('admin.reviews.title')}</h2>
         <Space>
-          <span>Chỉ hiện đánh giá chưa trả lời</span>
+          <span>{t('admin.reviews.onlyUnanswered')}</span>
           <Switch
             checked={onlyUnanswered}
             onChange={checked => { setOnlyUnanswered(checked); setPage(0); }}
@@ -152,13 +155,13 @@ const AdminReviews: React.FC = () => {
       />
 
       <Modal
-        title={`Phản hồi đánh giá của ${replyingTo?.username ?? ''}`}
+        title={t('admin.reviews.replyTitle', { username: replyingTo?.username ?? '' })}
         open={replyingTo !== null}
         onOk={handleSaveReply}
         onCancel={() => setReplyingTo(null)}
         confirmLoading={saving}
-        okText="Gửi phản hồi"
-        cancelText="Hủy"
+        okText={t('admin.reviews.send')}
+        cancelText={t('common.cancel')}
       >
         {replyingTo && (
           <div style={{ background: '#fafafa', padding: 12, borderRadius: 6, marginBottom: 12 }}>
@@ -171,7 +174,7 @@ const AdminReviews: React.FC = () => {
           maxLength={MAX_REPLY_LENGTH}
           showCount
           onChange={e => setReplyText(e.target.value)}
-          placeholder="Phản hồi sẽ hiển thị công khai dưới đánh giá, đứng tên khách sạn."
+          placeholder={t('admin.reviews.replyPlaceholder')}
         />
       </Modal>
     </div>

@@ -827,6 +827,8 @@ button {
 .bk-section-link {
   background: none;
   border: none;
+  /* The earlier .bk-section-link rule adds padding, which pushed the link off the content edge and baseline. */
+  padding: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--blue-accent);
@@ -2384,7 +2386,8 @@ button {
 ═══════════════════════════════════════════════════════════════ */
 .footer-container {
   width: 100%;
-  padding: 40px 5%;
+  /* Full-width background, content aligned with .container like the rest of the page. */
+  padding: 40px max(var(--container-pad), calc((100% - var(--container)) / 2 + var(--container-pad)));
   font-family: var(--font-family-base, Arial, sans-serif);
   color: #333;
   background-color: #fff;
