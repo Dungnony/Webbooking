@@ -6,6 +6,7 @@ import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
 import com.Nhom2.booking.exception.TooManyRequestsException;
+import com.Nhom2.booking.exception.UnauthorizedException;
 import com.Nhom2.booking.security.JwtUtil;
 import com.Nhom2.booking.security.RateLimiter;
 import org.junit.jupiter.api.BeforeEach;
@@ -125,6 +126,19 @@ class UserServiceLoginTest {
 
         assertThatThrownBy(() -> userService.login(loginRequest("alice", "Secret#2026")))
                 .isInstanceOf(TooManyRequestsException.class);
+    }
+
+    @Test
+    void unknownUserAndWrongPasswordGetTheSameUnauthorizedError() {
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user("alice", "alice@gmail.com")));
+        when(userRepository.findByUsername("ghost")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.login(loginRequest("alice", "wrong")))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasFieldOrPropertyWithValue("code", "error.login.invalidCredentials");
+        assertThatThrownBy(() -> userService.login(loginRequest("ghost", "whatever")))
+                .isInstanceOf(UnauthorizedException.class)
+                .hasFieldOrPropertyWithValue("code", "error.login.invalidCredentials");
     }
 
     @Test

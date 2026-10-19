@@ -5,6 +5,7 @@ import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.security.JwtUtil;
 import com.Nhom2.booking.security.RateLimiter;
@@ -82,8 +83,8 @@ class UserServiceEmailUniquenessTest {
                 .thenReturn(List.of(user(1L, "alice", "alice@example.com")));
 
         assertThatThrownBy(() -> userService.sendOtp(register("alice2", "Alice@Example.com")))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Email already exists");
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", UserService.EMAIL_EXISTS);
         verify(mailService, never()).sendMail(anyString(), anyString(), anyString());
     }
 
@@ -102,8 +103,8 @@ class UserServiceEmailUniquenessTest {
                 .thenReturn(List.of(user(2L, "google-carol", "carol@example.com")));
 
         assertThatThrownBy(() -> userService.verifyOtp("carol@example.com", otp))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Email already exists");
+                .isInstanceOf(BusinessException.class)
+                .hasFieldOrPropertyWithValue("code", UserService.EMAIL_EXISTS);
         verify(userRepository, never()).save(any());
     }
 

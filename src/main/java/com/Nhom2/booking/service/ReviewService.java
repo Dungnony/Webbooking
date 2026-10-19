@@ -7,7 +7,9 @@ import com.Nhom2.booking.entity.Hotel;
 import com.Nhom2.booking.entity.Review;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.ReviewRepository;
@@ -28,10 +30,9 @@ public class ReviewService {
     static final int MAX_PAGE_SIZE = 50;
     static final int MAX_REPLY_LENGTH = 2000;
 
-    private static final String LOGIN_REQUIRED = "Đăng nhập để viết đánh giá.";
-    private static final String ALREADY_REVIEWED = "Bạn đã đánh giá khách sạn này.";
-    private static final String PAID_BOOKING_REQUIRED =
-            "Chỉ khách đã đặt và thanh toán phòng tại khách sạn này mới được đánh giá.";
+    private static final String LOGIN_REQUIRED = "error.review.loginRequired";
+    private static final String ALREADY_REVIEWED = "error.review.alreadyReviewed";
+    private static final String PAID_BOOKING_REQUIRED = "error.review.paidBookingRequired";
 
     @Autowired
     private ReviewRepository repository;
@@ -48,9 +49,12 @@ public class ReviewService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private Messages messages;
+
     public ReviewPageResponse getHotelReviews(Long hotelId, int page, int size) {
         if (!hotelRepository.existsById(hotelId)) {
-            throw new NotFoundException("Hotel not found");
+            throw new NotFoundException("error.hotel.notFound");
         }
         PageRequest pageRequest = safePageRequest(page, size);
         Page<Review> result = repository.findByHotelIdOrderByCreatedAtDesc(hotelId, pageRequest);
@@ -72,10 +76,10 @@ public class ReviewService {
         Review review = getReview(reviewId);
         String text = reply == null ? "" : reply.trim();
         if (text.isEmpty()) {
-            throw new RuntimeException("Nội dung phản hồi không được trống");
+            throw new BusinessException("error.review.replyEmpty");
         }
         if (text.length() > MAX_REPLY_LENGTH) {
-            throw new RuntimeException("Phản hồi tối đa " + MAX_REPLY_LENGTH + " ký tự");
+            throw new BusinessException("error.review.replyTooLong", MAX_REPLY_LENGTH);
         }
 
         review.setHotelReply(text);
@@ -102,7 +106,7 @@ public class ReviewService {
 
     private Review getReview(Long reviewId) {
         return repository.findById(reviewId)
-                .orElseThrow(() -> new NotFoundException("Review not found"));
+                .orElseThrow(() -> new NotFoundException("error.review.notFound"));
     }
 
     private static PageRequest safePageRequest(int page, int size) {
@@ -121,15 +125,9 @@ public class ReviewService {
 
     /** {@code username} is null for an anonymous visitor. */
     public ReviewEligibilityResponse checkEligibility(String username, Long hotelId) {
-        if (username == null) {
-            return new ReviewEligibilityResponse(false, LOGIN_REQUIRED);
-        }
-        return userRepository.findByUsername(username)
-                .map(user -> {
-                    String problem = eligibilityProblem(user, hotelId);
-                    return new ReviewEligibilityResponse(problem == null, problem);
-                })
-                .orElse(new ReviewEligibilityResponse(false, LOGIN_REQUIRED));
+        User user = username == null ? null : userRepository.findByUsername(username).orElse(null);
+        String problem = user == null ? LOGIN_REQUIRED : eligibilityProblem(user, hotelId);
+        return new ReviewEligibilityResponse(problem == null, problem == null ? null : messages.get(problem));
     }
 
     /**
@@ -139,19 +137,19 @@ public class ReviewService {
     @Transactional
     public Review create(String username, Review request) {
         if (request == null || request.getHotel() == null || request.getHotel().getId() == null) {
-            throw new RuntimeException("Hotel id is required");
+            throw new BusinessException("error.review.hotelRequired");
         }
         if (request.getRating() == null || request.getRating() < MIN_RATING || request.getRating() > MAX_RATING) {
-            throw new RuntimeException("Rating must be between " + MIN_RATING + " and " + MAX_RATING);
+            throw new BusinessException("error.review.ratingRange", MIN_RATING, MAX_RATING);
         }
 
         User author = userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
         Hotel hotel = hotelRepository.findById(request.getHotel().getId())
-                .orElseThrow(() -> new NotFoundException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
         String problem = eligibilityProblem(author, hotel.getId());
         if (problem != null) {
-            throw new RuntimeException(problem);
+            throw new BusinessException(problem);
         }
 
         Review review = new Review();

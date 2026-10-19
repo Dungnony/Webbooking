@@ -62,10 +62,10 @@ public class NotificationService {
     private Notification getOwnNotification(Long notificationId) {
         User user = getCurrentUser();
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new NotFoundException("Notification not found"));
+                .orElseThrow(() -> new NotFoundException("error.notification.notFound"));
 
         if (!notification.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("You can only access your own notification");
+            throw new ForbiddenException("error.notification.notOwner");
         }
         return notification;
     }
@@ -76,6 +76,6 @@ public class NotificationService {
                 .getName();
 
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
     }
 }

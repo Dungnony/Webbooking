@@ -2,6 +2,7 @@ package com.Nhom2.booking.service;
 
 import com.Nhom2.booking.entity.Hotel;
 import com.Nhom2.booking.entity.Room;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRoomRepository;
 import com.Nhom2.booking.repository.HotelRepository;
@@ -30,7 +31,7 @@ public class RoomService {
     public Room create(Long hotelId, Room room) {
         validateRoomFields(room);
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new NotFoundException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
 
         room.setHotel(hotel);
         return roomRepository.save(room);
@@ -41,7 +42,7 @@ public class RoomService {
      */
     public Room update(Long id, Room changes) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Room not found"));
+                .orElseThrow(() -> new NotFoundException("error.room.notFound"));
         validateRoomFields(changes);
 
         room.setName(changes.getName().trim());
@@ -55,19 +56,18 @@ public class RoomService {
 
     public List<Room> getByHotel(Long hotelId) {
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new NotFoundException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
 
         return roomRepository.findByHotel(hotel);
     }
 
     public void delete(Long id) {
         if (!roomRepository.existsById(id)) {
-            throw new NotFoundException("Room not found");
+            throw new NotFoundException("error.room.notFound");
         }
         // Past bookings reference the room; deleting it would break their history (and the foreign key).
         if (bookingRoomRepository.existsByRoomId(id)) {
-            throw new RuntimeException(
-                    "Phòng đã có lịch sử đặt nên không thể xóa. Hãy đặt số lượng về 0 để ngừng nhận đặt phòng.");
+            throw new BusinessException("error.room.hasBookings");
         }
         roomRepository.deleteById(id);
     }
@@ -82,17 +82,17 @@ public class RoomService {
 
     private void validateRoomFields(Room room) {
         if (room == null || room.getName() == null || room.getName().isBlank()) {
-            throw new RuntimeException("Tên phòng không được trống");
+            throw new BusinessException("error.room.nameRequired");
         }
         if (room.getPricePerNight() == null || room.getPricePerNight() <= 0) {
-            throw new RuntimeException("Giá phòng phải lớn hơn 0");
+            throw new BusinessException("error.room.priceInvalid");
         }
         if (room.getCapacity() == null || room.getCapacity() < 1) {
-            throw new RuntimeException("Sức chứa phải từ 1 người trở lên");
+            throw new BusinessException("error.room.capacityInvalid");
         }
         // Zero is allowed: it keeps the room and its history but stops new bookings.
         if (room.getQuantity() == null || room.getQuantity() < 0) {
-            throw new RuntimeException("Số lượng phòng không được âm");
+            throw new BusinessException("error.room.quantityNegative");
         }
     }
 }

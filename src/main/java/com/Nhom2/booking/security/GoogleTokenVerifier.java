@@ -4,6 +4,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import com.Nhom2.booking.exception.UnauthorizedException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -33,16 +34,16 @@ public class GoogleTokenVerifier {
         try {
             idToken = verifier.verify(idTokenString);
         } catch (Exception e) {
-            throw new RuntimeException("Không thể xác thực token Google: " + e.getMessage(), e);
+            throw new UnauthorizedException("error.google.verifyFailed", e);
         }
         if (idToken == null) {
-            throw new RuntimeException("Token Google không hợp lệ hoặc đã hết hạn");
+            throw new UnauthorizedException("error.google.invalidToken");
         }
 
         GoogleIdToken.Payload payload = idToken.getPayload();
         String email = payload.getEmail();
         if (email == null || email.isBlank() || !Boolean.TRUE.equals(payload.getEmailVerified())) {
-            throw new RuntimeException("Email Google chưa được xác thực");
+            throw new UnauthorizedException("error.google.emailNotVerified");
         }
         return email;
     }

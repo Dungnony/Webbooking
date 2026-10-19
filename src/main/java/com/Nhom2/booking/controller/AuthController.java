@@ -6,12 +6,11 @@ import com.Nhom2.booking.dto.LoginRequest;
 import com.Nhom2.booking.dto.RegisterRequest;
 import com.Nhom2.booking.dto.ResetPasswordRequest;
 import com.Nhom2.booking.dto.VerifyOtpRequest;
-import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.service.UserService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+/** Failures are rendered by GlobalExceptionHandler as a translated {@code { message, code }} body. */
 @RestController
 @RequestMapping("/auth")
 public class AuthController {
@@ -25,35 +24,19 @@ public class AuthController {
     // Đăng ký -> gửi OTP
     @PostMapping("/register")
     public ResponseEntity<String> register(@RequestBody RegisterRequest request) {
-        try {
-            return ResponseEntity.ok(userService.sendOtp(request));
-        } catch (TooManyRequestsException e) {
-            return tooManyRequests(e);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.sendOtp(request));
     }
 
     // Xác nhận OTP -> lưu user vào DB
     @PostMapping("/verify-otp")
     public ResponseEntity<String> verifyOtp(@RequestBody VerifyOtpRequest request) {
-        try {
-            return ResponseEntity.ok(userService.verifyOtp(request.getEmail(), request.getOtp()));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.verifyOtp(request.getEmail(), request.getOtp()));
     }
 
     // Login
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest request) {
-        try {
-            return ResponseEntity.ok(userService.login(request));
-        } catch (TooManyRequestsException e) {
-            return tooManyRequests(e);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.login(request));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -63,24 +46,13 @@ public class AuthController {
     // Bước 1: Nhập username -> gửi OTP đến email liên kết
     @PostMapping("/forgot-password")
     public ResponseEntity<String> forgotPassword(@RequestBody ForgotPasswordRequest request) {
-        try {
-            String maskedEmail = userService.forgotPassword(request);
-            return ResponseEntity.ok(maskedEmail);
-        } catch (TooManyRequestsException e) {
-            return tooManyRequests(e);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.forgotPassword(request));
     }
 
     // Bước 2: Nhập OTP + mật khẩu mới -> đặt lại mật khẩu
     @PostMapping("/reset-password")
     public ResponseEntity<String> resetPassword(@RequestBody ResetPasswordRequest request) {
-        try {
-            return ResponseEntity.ok(userService.resetPassword(request));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.resetPassword(request));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -89,15 +61,6 @@ public class AuthController {
 
     @PostMapping("/google")
     public ResponseEntity<String> googleLogin(@RequestBody GoogleLoginRequest request) {
-        try {
-            String token = userService.loginWithGoogle(request.getCredential());
-            return ResponseEntity.ok(token);
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
-        }
+        return ResponseEntity.ok(userService.loginWithGoogle(request.getCredential()));
     }
-
-    private static ResponseEntity<String> tooManyRequests(TooManyRequestsException e) {
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(e.getMessage());
-    }
-}
+}

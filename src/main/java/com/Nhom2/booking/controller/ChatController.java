@@ -1,9 +1,11 @@
 package com.Nhom2.booking.controller;
 
 import com.Nhom2.booking.entity.AppConfig;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.AppConfigRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -14,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -31,10 +34,12 @@ public class ChatController {
 
     private final AppConfigRepository configRepository;
     private final RestTemplate restTemplate;
+    private final Messages messages;
 
-    public ChatController(AppConfigRepository configRepository, RestTemplate restTemplate) {
+    public ChatController(AppConfigRepository configRepository, RestTemplate restTemplate, Messages messages) {
         this.configRepository = configRepository;
         this.restTemplate = restTemplate;
+        this.messages = messages;
     }
 
     @PostMapping
@@ -42,7 +47,7 @@ public class ChatController {
     public ResponseEntity<?> chatWithAI(@RequestBody ChatRequest request) {
         List<Map<String, String>> conversation = sanitizeMessages(request.getMessages());
         if (conversation.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("reply", "Tin nhắn không hợp lệ."));
+            return ResponseEntity.badRequest().body(Map.of("reply", messages.get("error.ai.invalidMessage")));
         }
 
         try {
@@ -78,7 +83,7 @@ public class ChatController {
                 TẤT CẢ khách sạn đều ở Hà Nội.
 
                 Quy tắc:
-                - Trả lời ngắn gọn, thân thiện bằng tiếng Việt
+                - %s
                 - Khi tư vấn hãy hỏi thêm: số người, ngân sách, có trẻ em không
                 - KHÔNG được nói "không có thông tin" vì bạn đã có đủ dữ liệu ở trên
                 - Giá hiển thị dạng: 1.200.000đ/đêm
@@ -86,7 +91,8 @@ public class ChatController {
                 hotelField(hotelInfo, "name"),
                 hotelField(hotelInfo, "city"),
                 hotelField(hotelInfo, "ratingAvg"),
-                hotelField(hotelInfo, "description")
+                hotelField(hotelInfo, "description"),
+                replyLanguageRule(LocaleContextHolder.getLocale())
             );
 
             List<Map<String, String>> openAiMessages = new ArrayList<>();
@@ -124,7 +130,7 @@ public class ChatController {
 
         } catch (Exception e) {
             log.error("Chat request to OpenAI failed", e);
-            return ResponseEntity.status(500).body(Map.of("reply", "Lỗi kết nối từ Backend tới AI."));
+            return ResponseEntity.status(500).body(Map.of("reply", messages.get("error.ai.unavailable")));
         }
     }
 
@@ -144,6 +150,18 @@ public class ChatController {
                 .toList();
 
         return valid.subList(Math.max(0, valid.size() - MAX_MESSAGES), valid.size());
+    }
+
+    /**
+     * The prompt itself is Vietnamese, so without an explicit rule the model answers in Vietnamese
+     * even when the guest uses the English UI.
+     */
+    static String replyLanguageRule(Locale locale) {
+        if (Locale.ENGLISH.getLanguage().equals(locale.getLanguage())) {
+            return "Always reply briefly and warmly in English (prices may stay in VND), "
+                    + "unless the guest writes in another language; then reply in that language";
+        }
+        return "Trả lời ngắn gọn, thân thiện bằng tiếng Việt, trừ khi khách viết bằng ngôn ngữ khác thì trả lời bằng ngôn ngữ đó";
     }
 
     private static String hotelField(Map<String, Object> hotelInfo, String key) {

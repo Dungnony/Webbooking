@@ -40,7 +40,7 @@ public class WishlistService {
     public List<Long> add(String username, Long hotelId) {
         User user = getUser(username);
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new NotFoundException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
         addIfMissing(user, hotel);
         return hotelIdsOf(user);
     }
@@ -87,6 +87,6 @@ public class WishlistService {
 
     private User getUser(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
     }
 }

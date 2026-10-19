@@ -13,6 +13,7 @@ import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.enums.RequestStatus;
 import com.Nhom2.booking.enums.RequestType;
 import com.Nhom2.booking.event.BookingPaidEvent;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -81,7 +82,7 @@ public class BookingService {
         User user = getUserByUsername(username);
 
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new NotFoundException("Hotel not found"));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
 
         long nights = countNights(request.getCheckInDate(), request.getCheckOutDate());
 
@@ -147,14 +148,14 @@ public class BookingService {
         validateBookingOwner(booking, user);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
-            throw new RuntimeException("Booking already cancelled");
+            throw new BusinessException("error.booking.alreadyCancelled");
         }
         if (booking.getStatus() == BookingStatus.REJECTED) {
-            throw new RuntimeException("Rejected booking cannot be cancelled");
+            throw new BusinessException("error.booking.rejectedCannotCancel");
         }
         // Cancelling a paid booking means a refund, which an admin has to handle.
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new RuntimeException("Booking đã thanh toán. Vui lòng gửi yêu cầu hủy để admin xử lý hoàn tiền.");
+            throw new BusinessException("error.booking.paidNeedsRequest");
         }
         ensureBeforeCheckIn(booking);
 
@@ -181,7 +182,7 @@ public class BookingService {
         Booking booking = getBooking(bookingId);
 
         if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new RuntimeException("Only pending booking can be approved");
+            throw new BusinessException("error.booking.onlyPendingApprove");
         }
 
         validateAvailabilityForExistingBooking(
@@ -206,7 +207,7 @@ public class BookingService {
         Booking booking = getBooking(bookingId);
 
         if (booking.getStatus() != BookingStatus.PENDING) {
-            throw new RuntimeException("Only pending booking can be rejected");
+            throw new BusinessException("error.booking.onlyPendingReject");
         }
 
         booking.setStatus(BookingStatus.REJECTED);
@@ -228,7 +229,7 @@ public class BookingService {
         Booking booking = getBooking(bookingId);
 
         if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            throw new RuntimeException("Only confirmed booking can be marked as paid");
+            throw new BusinessException("error.booking.onlyConfirmedMarkPaid");
         }
 
         booking.setPaymentStatus(PaymentStatus.PAID);
@@ -250,7 +251,7 @@ public class BookingService {
             CreateBookingRequestDto request) {
 
         if (request == null || request.getType() == null) {
-            throw new RuntimeException("Request type is required");
+            throw new BusinessException("error.request.typeRequired");
         }
 
         User user = getUserByUsername(username);
@@ -259,7 +260,7 @@ public class BookingService {
 
         if (booking.getStatus() == BookingStatus.CANCELLED
                 || booking.getStatus() == BookingStatus.REJECTED) {
-            throw new RuntimeException("This booking cannot create new request");
+            throw new BusinessException("error.request.bookingClosed");
         }
 
         if (request.getType() == RequestType.CHANGE_DATE) {
@@ -318,6 +319,11 @@ public class BookingService {
 
         if (request.getType() == RequestType.CANCEL) {
             booking.setStatus(BookingStatus.CANCELLED);
+            // Approving the cancellation of a paid booking is the admin's commitment to refund it;
+            // it also drops the booking from paid revenue and review eligibility.
+            if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+                booking.setPaymentStatus(PaymentStatus.REFUNDED);
+            }
         } else if (request.getType() == RequestType.CHANGE_DATE) {
             validateBookingDates(request.getNewCheckIn(), request.getNewCheckOut());
             validateAvailabilityForExistingBooking(
@@ -377,35 +383,35 @@ public class BookingService {
 
     private void validateBookingRequest(BookingRequest request) {
         if (request == null) {
-            throw new RuntimeException("Booking request is required");
+            throw new BusinessException("error.booking.requestRequired");
         }
         validateBookingDates(request.getCheckInDate(), request.getCheckOutDate());
         if (request.getRooms() == null || request.getRooms().isEmpty()) {
-            throw new RuntimeException("Booking must contain at least one room");
+            throw new BusinessException("error.booking.noRooms");
         }
     }
 
     private void validateBookingDates(LocalDate checkIn, LocalDate checkOut) {
         if (checkIn == null || checkOut == null) {
-            throw new RuntimeException("Check-in and check-out date are required");
+            throw new BusinessException("error.booking.datesRequired");
         }
         if (!checkIn.isBefore(checkOut)) {
-            throw new RuntimeException("Check-in date must be before check-out date");
+            throw new BusinessException("error.booking.checkInBeforeCheckOut");
         }
         if (checkIn.isBefore(LocalDate.now(clock))) {
-            throw new RuntimeException("Check-in date must not be in the past");
+            throw new BusinessException("error.booking.checkInPast");
         }
     }
 
     private void ensureBeforeCheckIn(Booking booking) {
         if (!LocalDate.now(clock).isBefore(booking.getCheckInDate())) {
-            throw new RuntimeException("Không thể hủy booking từ ngày nhận phòng trở đi.");
+            throw new BusinessException("error.booking.tooLateToCancel");
         }
     }
 
     private Room lockRoom(Long roomId) {
         return roomRepository.findByIdForUpdate(roomId)
-                .orElseThrow(() -> new NotFoundException("Room not found"));
+                .orElseThrow(() -> new NotFoundException("error.room.notFound"));
     }
 
     private long countNights(LocalDate checkIn, LocalDate checkOut) {
@@ -414,19 +420,19 @@ public class BookingService {
 
     private void validateRoomRequest(BookingRoomRequest roomRequest) {
         if (roomRequest == null || roomRequest.getRoomId() == null) {
-            throw new RuntimeException("Room id is required");
+            throw new BusinessException("error.booking.roomIdRequired");
         }
         if (roomRequest.getQuantity() == null || roomRequest.getQuantity() <= 0) {
-            throw new RuntimeException("Room quantity must be greater than 0");
+            throw new BusinessException("error.booking.roomQuantityInvalid");
         }
     }
 
     private void validateRoomBelongsToHotel(Room room, Long hotelId) {
         if (room.getHotel() == null || !room.getHotel().getId().equals(hotelId)) {
-            throw new RuntimeException("Room does not belong to this hotel");
+            throw new BusinessException("error.booking.roomNotInHotel");
         }
         if (room.getPricePerNight() == null || room.getPricePerNight() <= 0) {
-            throw new RuntimeException("Room price is invalid");
+            throw new BusinessException("error.room.priceInvalid");
         }
     }
 
@@ -437,7 +443,7 @@ public class BookingService {
             LocalDate checkOut,
             Long excludedBookingId) {
         if (room.getQuantity() == null || room.getQuantity() <= 0) {
-            throw new RuntimeException("Room quantity is invalid");
+            throw new BusinessException("error.room.quantityInvalid");
         }
 
         Long reserved = excludedBookingId == null
@@ -456,8 +462,7 @@ public class BookingService {
         int available = room.getQuantity() - reserved.intValue();
 
         if (requestedQuantity > available) {
-            throw new RuntimeException(
-                    "Room " + room.getName() + " only has " + available + " available");
+            throw new BusinessException("error.booking.roomUnavailable", room.getName(), available);
         }
     }
 
@@ -491,23 +496,23 @@ public class BookingService {
 
     private Booking getBooking(Long bookingId) {
         return bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new NotFoundException("Booking not found"));
+                .orElseThrow(() -> new NotFoundException("error.booking.notFound"));
     }
 
     private com.Nhom2.booking.entity.BookingRequest getBookingRequest(Long requestId) {
         return bookingRequestRepository.findById(requestId)
-                .orElseThrow(() -> new NotFoundException("Booking request not found"));
+                .orElseThrow(() -> new NotFoundException("error.request.notFound"));
     }
 
     private void ensureRequestPending(com.Nhom2.booking.entity.BookingRequest request) {
         if (request.getStatus() != RequestStatus.PENDING) {
-            throw new RuntimeException("Only pending request can be processed");
+            throw new BusinessException("error.request.notPending");
         }
     }
 
     private void validateBookingOwner(Booking booking, User user) {
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("You can only access your own booking");
+            throw new ForbiddenException("error.booking.notOwner");
         }
     }
 
@@ -520,6 +525,6 @@ public class BookingService {
 
     private User getUserByUsername(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
     }
 }

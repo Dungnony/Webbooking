@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { GoogleLogin, CredentialResponse } from '@react-oauth/google';
 import { authApi } from '../api';
 import { saveSession } from '../utils/auth';
-import { getErrorMessage, getErrorStatus } from '../utils/errors';
+import { getErrorCode, getErrorMessage, getErrorStatus } from '../utils/errors';
 import { STRONG_PASSWORD_PATTERN } from '../utils/passwordPolicy';
 
 const Register: React.FC = () => {
@@ -23,12 +23,13 @@ const Register: React.FC = () => {
       setRegisterData(values);
       setStep('otp');
     } catch (error) {
-      // The backend answers with these fixed English codes; anything else is shown as returned.
+      // These two get a more helpful hint than the backend message; anything else is shown as returned.
+      const code = getErrorCode(error);
       if (getErrorStatus(error) === undefined) {
         message.error(t('auth.serverUnreachable'));
-      } else if (getErrorMessage(error, '') === 'Username already exists') {
+      } else if (code === 'error.username.exists') {
         message.error(t('auth.usernameExists'));
-      } else if (getErrorMessage(error, '') === 'Email already exists') {
+      } else if (code === 'error.email.exists') {
         message.error(t('auth.emailExists'));
       } else {
         message.error(getErrorMessage(error, t('auth.genericFailed')));
@@ -51,18 +52,18 @@ const Register: React.FC = () => {
         message.error(t('auth.otpInvalidGeneric'));
       }
     } catch (error) {
-      const errResponse = getErrorMessage(error, t('auth.otpVerifyFailed'));
+      const code = getErrorCode(error);
 
-      if (errResponse === 'OTP invalid') {
+      if (code === 'error.otp.invalid') {
         message.error(t('auth.otpInvalidOrExpired'));
-      } else if (errResponse === 'Email already exists') {
+      } else if (code === 'error.email.exists') {
         message.error(t('auth.emailTakenMeanwhile'));
         setStep('register');
-      } else if (errResponse === 'No registration request found') {
+      } else if (code === 'error.registration.notFound') {
         message.error(t('auth.noRegistration'));
         setStep('register');
       } else {
-        message.error(errResponse);
+        message.error(getErrorMessage(error, t('auth.otpVerifyFailed')));
       }
     } finally {
       setLoading(false);

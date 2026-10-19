@@ -12,6 +12,7 @@ import com.Nhom2.booking.controller.RoomController;
 import com.Nhom2.booking.controller.UserController;
 import com.Nhom2.booking.controller.WishlistController;
 import com.Nhom2.booking.entity.User;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.AppConfigRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.RoomRepository;
@@ -54,7 +55,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         UserController.class,
         WishlistController.class
 })
-@Import({SecurityConfig.class, JwtUtil.class})
+@Import({SecurityConfig.class, JwtUtil.class, LocaleConfig.class, Messages.class})
 class SecurityRulesTest {
 
     @Autowired

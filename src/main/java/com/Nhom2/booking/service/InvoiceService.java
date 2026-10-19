@@ -2,6 +2,7 @@ package com.Nhom2.booking.service;
 
 import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -28,7 +29,7 @@ public class InvoiceService {
     public byte[] generateForOwner(String username, Long bookingId) {
         Booking booking = getPaidBooking(bookingId);
         if (booking.getUser() == null || !booking.getUser().getUsername().equals(username)) {
-            throw new ForbiddenException("You can only access your own booking");
+            throw new ForbiddenException("error.booking.notOwner");
         }
         return pdfGenerator.generate(booking);
     }
@@ -56,9 +57,9 @@ public class InvoiceService {
 
     private Booking getPaidBooking(Long bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new NotFoundException("Booking not found"));
+                .orElseThrow(() -> new NotFoundException("error.booking.notFound"));
         if (booking.getPaymentStatus() != PaymentStatus.PAID) {
-            throw new RuntimeException("Hóa đơn chỉ có sau khi booking đã được thanh toán");
+            throw new BusinessException("error.invoice.notPaid");
         }
         return booking;
     }

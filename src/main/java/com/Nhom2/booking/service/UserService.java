@@ -6,7 +6,9 @@ import com.Nhom2.booking.dto.ResetPasswordRequest;
 import com.Nhom2.booking.dto.UpdateProfileRequest;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.exception.UnauthorizedException;
 import com.Nhom2.booking.repository.UserRepository;
 import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.security.GoogleTokenVerifier;
@@ -29,20 +31,22 @@ import java.util.regex.Pattern;
 public class UserService {
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
     private static final String EMAIL_CHANGE_OTP_PREFIX = "email-change:";
-    private static final String EMAIL_EXISTS_MESSAGE = "Email already exists";
+    static final String EMAIL_EXISTS = "error.email.exists";
+    private static final String OTP_INVALID = "error.otp.invalid";
+    private static final String OTP_REQUIRED = "error.otp.required";
+    private static final String USERNAME_REQUIRED = "error.username.required";
+    private static final String NEW_PASSWORD_REQUIRED = "error.password.required";
+    private static final String USER_NOT_FOUND = "error.user.notFound";
+    private static final String ACCOUNT_NOT_FOUND = "error.account.notFound";
+    private static final String INVALID_CREDENTIALS = "error.login.invalidCredentials";
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final int MAX_PASSWORD_LENGTH = 72;
-    private static final String PASSWORD_POLICY_MESSAGE =
-            "Mật khẩu phải chứ từ 8-72 ký tự bào gồm chữ hoa, chữ thường, số , ký tự đặc biệt và không có khoảng trống.";
+    private static final String PASSWORD_POLICY = "error.password.policy";
     // Brute-force protection: limits are per account/email, see RateLimiter for why not per IP.
     static final int MAX_FAILED_LOGINS = 5;
     static final int MAX_OTP_REQUESTS = 3;
     private static final Duration LIMIT_WINDOW = Duration.ofMinutes(15);
-    private static final String LOGIN_LOCKED_MESSAGE =
-            "Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút hoặc dùng \"Quên mật khẩu\".";
-    private static final String OTP_LIMIT_MESSAGE =
-            "Bạn đã yêu cầu mã OTP quá nhiều lần. Vui lòng thử lại sau 15 phút.";
     private final Map<String, RegisterRequest> pendingUsers = new HashMap<>();
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
@@ -80,7 +84,7 @@ public class UserService {
 
     public User getByUsername(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
     }
 
     /**
@@ -89,7 +93,7 @@ public class UserService {
      */
     public User updateProfile(String username, UpdateProfileRequest request) {
         if (request == null || isBlank(request.getNewPassword())) {
-            throw new RuntimeException("Vui lòng nhập mật khẩu mới");
+            throw new BusinessException(NEW_PASSWORD_REQUIRED);
         }
 
         User user = getByUsername(username);
@@ -113,7 +117,7 @@ public class UserService {
         String email = requireValidEmail(newEmail);
         User user = getByUsername(username);
         if (email.equalsIgnoreCase(user.getEmail())) {
-            throw new RuntimeException("Email mới trùng với email hiện tại");
+            throw new BusinessException("error.email.sameAsCurrent");
         }
         ensureEmailNotUsedByOthers(email, user);
         limitOtpRequests("otp-email:" + username);
@@ -135,13 +139,13 @@ public class UserService {
     public User confirmEmailChange(String username, String newEmail, String otp) {
         String email = requireValidEmail(newEmail);
         if (isBlank(otp)) {
-            throw new RuntimeException("Vui lòng nhập mã OTP");
+            throw new BusinessException(OTP_REQUIRED);
         }
 
         User user = getByUsername(username);
         String otpKey = emailChangeOtpKey(username, email);
         if (!otpService.verifyOtp(otpKey, otp.trim())) {
-            throw new RuntimeException("Mã OTP không đúng hoặc đã hết hạn");
+            throw new BusinessException(OTP_INVALID);
         }
         // Re-checked because another account may have claimed the address since the OTP was sent.
         ensureEmailNotUsedByOthers(email, user);
@@ -154,14 +158,14 @@ public class UserService {
 
     private String requireValidEmail(String email) {
         if (isBlank(email) || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
-            throw new RuntimeException("Email không hợp lệ");
+            throw new BusinessException("error.email.invalid");
         }
         return email.trim();
     }
 
     private void ensureEmailNotUsedByOthers(String email, User user) {
         if (isEmailTakenByOther(email, user.getId())) {
-            throw new RuntimeException("Email đã được sử dụng bởi tài khoản khác");
+            throw new BusinessException(EMAIL_EXISTS);
         }
     }
 
@@ -174,7 +178,7 @@ public class UserService {
     // Each OTP request sends a mail from the team's Gmail account, so it is capped per account/email.
     private void limitOtpRequests(String key) {
         if (!rateLimiter.tryAcquire(key, MAX_OTP_REQUESTS, LIMIT_WINDOW)) {
-            throw new TooManyRequestsException(OTP_LIMIT_MESSAGE);
+            throw new TooManyRequestsException("error.otp.tooManyRequests");
         }
     }
 
@@ -186,7 +190,7 @@ public class UserService {
         User existingUser = null;
         if (user.getId() != null) {
             existingUser = userRepository.findById(user.getId())
-                    .orElseThrow(() -> new NotFoundException("User not found"));
+                    .orElseThrow(() -> new NotFoundException(USER_NOT_FOUND));
         }
         if (user.getRole() == null) {
             user.setRole(existingUser != null && existingUser.getRole() != null
@@ -194,11 +198,11 @@ public class UserService {
                     : UserRole.USER);
         }
         if (!isBlank(user.getEmail()) && isEmailTakenByOther(user.getEmail().trim(), user.getId())) {
-            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
+            throw new BusinessException(EMAIL_EXISTS);
         }
         if (isBlank(user.getPassword())) {
             if (existingUser == null) {
-                throw new RuntimeException(PASSWORD_POLICY_MESSAGE);
+                throw new BusinessException(PASSWORD_POLICY);
             }
             user.setPassword(existingUser.getPassword());
         } else if (!isBcrypt(user.getPassword())) {
@@ -214,11 +218,11 @@ public class UserService {
     //sendotp
     public String sendOtp(RegisterRequest request) {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
-            throw new RuntimeException("Username already exists");
+            throw new BusinessException("error.username.exists");
         }
         String email = requireValidEmail(request.getEmail());
         if (isEmailTakenByOther(email, null)) {
-            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
+            throw new BusinessException(EMAIL_EXISTS);
         }
         request.setEmail(email);
         limitOtpRequests("otp-register:" + email.toLowerCase(Locale.ROOT));
@@ -235,15 +239,15 @@ public class UserService {
     public String verifyOtp(String rawEmail, String otp) {
         String email = rawEmail == null ? "" : rawEmail.trim();
         if (!otpService.verifyOtp(email, otp)) {
-            throw new RuntimeException("OTP invalid");
+            throw new BusinessException(OTP_INVALID);
         }
         RegisterRequest request = pendingUsers.get(email);
         if (request == null) {
-            throw new RuntimeException("No registration request found");
+            throw new BusinessException("error.registration.notFound");
         }
         // Re-checked because Google login or an email change may have claimed the address since the OTP was sent.
         if (isEmailTakenByOther(email, null)) {
-            throw new RuntimeException(EMAIL_EXISTS_MESSAGE);
+            throw new BusinessException(EMAIL_EXISTS);
         }
         User user = new User();
         user.setUsername(request.getUsername());
@@ -259,13 +263,14 @@ public class UserService {
     public String login(LoginRequest request) {
         String attemptKey = "login:" + String.valueOf(request.getUsername()).trim().toLowerCase(Locale.ROOT);
         if (rateLimiter.isLimited(attemptKey, MAX_FAILED_LOGINS)) {
-            throw new TooManyRequestsException(LOGIN_LOCKED_MESSAGE);
+            throw new TooManyRequestsException("error.login.locked");
         }
 
         Optional<User> found = userRepository.findByUsername(request.getUsername());
+        // Same error for an unknown user and a wrong password, so the response does not reveal which usernames exist.
         if (found.isEmpty()) {
             rateLimiter.record(attemptKey, LIMIT_WINDOW);
-            throw new RuntimeException("User not found");
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
         User user = found.get();
         if (user.getRole() == null) {
@@ -274,7 +279,7 @@ public class UserService {
         }
         if (!passwordMatches(request.getPassword(), user.getPassword())) {
             rateLimiter.record(attemptKey, LIMIT_WINDOW);
-            throw new RuntimeException("Wrong password");
+            throw new UnauthorizedException(INVALID_CREDENTIALS);
         }
         rateLimiter.reset(attemptKey);
         if (!isBcrypt(user.getPassword())) {
@@ -299,10 +304,10 @@ public class UserService {
      */
     public String forgotPassword(ForgotPasswordRequest request) {
         if (request.getUsername() == null || request.getUsername().trim().isEmpty()) {
-            throw new RuntimeException("Vui lòng nhập tên đăng nhập");
+            throw new BusinessException(USERNAME_REQUIRED);
         }
         User user = userRepository.findByUsername(request.getUsername().trim())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản với username: " + request.getUsername()));
+                .orElseThrow(() -> new BusinessException(ACCOUNT_NOT_FOUND));
 
         String email = user.getEmail();
         limitOtpRequests("otp-reset:" + user.getUsername());
@@ -325,21 +330,21 @@ public class UserService {
      */
     public String resetPassword(ResetPasswordRequest request) {
         if (request.getUsername() == null || request.getUsername().trim().isEmpty()) {
-            throw new RuntimeException("Vui lòng nhập tên đăng nhập");
+            throw new BusinessException(USERNAME_REQUIRED);
         }
         if (request.getOtp() == null || request.getOtp().trim().isEmpty()) {
-            throw new RuntimeException("Vui lòng nhập mã OTP");
+            throw new BusinessException(OTP_REQUIRED);
         }
         if (request.getNewPassword() == null || request.getNewPassword().trim().isEmpty()) {
-            throw new RuntimeException("Vui lòng nhập mật khẩu mới");
+            throw new BusinessException(NEW_PASSWORD_REQUIRED);
         }
 
         User user = userRepository.findByUsername(request.getUsername().trim())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy tài khoản"));
+                .orElseThrow(() -> new BusinessException(ACCOUNT_NOT_FOUND));
 
         String otpKey = "reset:" + user.getUsername();
         if (!otpService.verifyOtp(otpKey, request.getOtp().trim())) {
-            throw new RuntimeException("Mã OTP không đúng hoặc đã hết hạn");
+            throw new BusinessException(OTP_INVALID);
         }
 
         // Validate password strength
@@ -395,7 +400,7 @@ public class UserService {
         // Accounts created before emails were enforced unique may share one; picking either could sign the user
         // into someone else's account.
         if (existingUsers.size() > 1) {
-            throw new RuntimeException("Email này đang gắn với nhiều tài khoản. Vui lòng đăng nhập bằng tên đăng nhập.");
+            throw new UnauthorizedException("error.google.multipleAccounts");
         }
 
         User user;
@@ -472,10 +477,10 @@ public class UserService {
     }
     private void validatePasswordStrength(String password, String username, String email) {
         if (password.length() < MIN_PASSWORD_LENGTH || password.length() > MAX_PASSWORD_LENGTH) {
-            throw new RuntimeException(PASSWORD_POLICY_MESSAGE);
+            throw new BusinessException(PASSWORD_POLICY);
         }
         if (password.contains(" ")) {
-            throw new RuntimeException(PASSWORD_POLICY_MESSAGE);
+            throw new BusinessException(PASSWORD_POLICY);
         }
         boolean hasUpper = false, hasLower = false, hasDigit = false, hasSpecial = false;
         for (char c : password.toCharArray()) {
@@ -485,7 +490,7 @@ public class UserService {
             else hasSpecial = true;
         }
         if (!hasUpper || !hasLower || !hasDigit || !hasSpecial) {
-            throw new RuntimeException(PASSWORD_POLICY_MESSAGE);
+            throw new BusinessException(PASSWORD_POLICY);
         }
     }
 }

@@ -7,6 +7,7 @@ import com.Nhom2.booking.entity.ChatMessage;
 import com.Nhom2.booking.entity.ChatRoom;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.UserRole;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.ChatMessageRepository;
@@ -71,7 +72,7 @@ public class SupportChatService {
         String text = validate(content);
         User user = getUser(username);
         if (user.getRole() == UserRole.ADMIN) {
-            throw new ForbiddenException("Admin trả lời khách trong trang quản trị");
+            throw new ForbiddenException("error.chat.adminUseDashboard");
         }
         ChatRoom room = roomRepository.findByUserId(user.getId()).orElseGet(() -> openRoom(user));
         return post(room, user, text);
@@ -186,22 +187,22 @@ public class SupportChatService {
     private static String validate(String content) {
         String text = content == null ? "" : content.trim();
         if (text.isEmpty()) {
-            throw new RuntimeException("Tin nhắn không được trống");
+            throw new BusinessException("error.chat.messageEmpty");
         }
         if (text.length() > MAX_MESSAGE_LENGTH) {
-            throw new RuntimeException("Tin nhắn tối đa " + MAX_MESSAGE_LENGTH + " ký tự");
+            throw new BusinessException("error.chat.messageTooLong", MAX_MESSAGE_LENGTH);
         }
         return text;
     }
 
     private ChatRoom getRoom(Long roomId) {
         return roomRepository.findById(roomId)
-                .orElseThrow(() -> new NotFoundException("Conversation not found"));
+                .orElseThrow(() -> new NotFoundException("error.chat.notFound"));
     }
 
     private User getUser(String username) {
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
     }
 
     private LocalDateTime now() {

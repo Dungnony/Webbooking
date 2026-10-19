@@ -10,6 +10,7 @@ import com.Nhom2.booking.entity.Room;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
+import com.Nhom2.booking.enums.RequestStatus;
 import com.Nhom2.booking.enums.RequestType;
 import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -182,6 +183,28 @@ class BookingServiceTest {
         verify(bookingRequestRepository, never()).save(any());
     }
 
+    @Test
+    void approvingTheCancelRequestOfAPaidBookingMarksItRefunded() {
+        Booking booking = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.PAID, TODAY.plusDays(3));
+        when(bookingRequestRepository.findById(5L)).thenReturn(Optional.of(pendingRequest(booking, RequestType.CANCEL)));
+
+        bookingService.approveBookingRequest(5L, null);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(booking.getPaymentStatus()).isEqualTo(PaymentStatus.REFUNDED);
+    }
+
+    @Test
+    void approvingTheCancelRequestOfAnUnpaidBookingLeavesItUnpaid() {
+        Booking booking = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.UNPAID, TODAY.plusDays(3));
+        when(bookingRequestRepository.findById(5L)).thenReturn(Optional.of(pendingRequest(booking, RequestType.CANCEL)));
+
+        bookingService.approveBookingRequest(5L, null);
+
+        assertThat(booking.getStatus()).isEqualTo(BookingStatus.CANCELLED);
+        assertThat(booking.getPaymentStatus()).isEqualTo(PaymentStatus.UNPAID);
+    }
+
     // ── invoice trigger ────────────────────────────────────────────────────────
 
     @Test
@@ -209,6 +232,15 @@ class BookingServiceTest {
         bookingRoom.setPrice(room.getPricePerNight());
         booking.setBookingRooms(new ArrayList<>(List.of(bookingRoom)));
         return booking;
+    }
+
+    private static com.Nhom2.booking.entity.BookingRequest pendingRequest(Booking booking, RequestType type) {
+        com.Nhom2.booking.entity.BookingRequest request = new com.Nhom2.booking.entity.BookingRequest();
+        request.setId(5L);
+        request.setBooking(booking);
+        request.setType(type);
+        request.setStatus(RequestStatus.PENDING);
+        return request;
     }
 
     private static BookingRequest bookingRequest(LocalDate checkIn, LocalDate checkOut) {

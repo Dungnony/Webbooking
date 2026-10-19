@@ -11,6 +11,7 @@ import {
   User,
 } from './api-generated';
 import { getErrorMessage } from './utils/errors';
+import i18n from './i18n';
 
 // ─── Khởi tạo Swagger client ──────────────────────────────────
 // baseUrl = '/proxy' để dựa vào Vite proxy (dev) hoặc Vercel rewrite (prod)
@@ -24,6 +25,12 @@ const swaggerApi = new Api({
     }
     return {};
   },
+});
+
+// The backend translates error messages and AI replies according to this header.
+swaggerApi.instance.interceptors.request.use(config => {
+  config.headers.set('Accept-Language', i18n.language);
+  return config;
 });
 
 export default swaggerApi;

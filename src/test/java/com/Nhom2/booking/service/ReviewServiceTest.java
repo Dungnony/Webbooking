@@ -8,6 +8,7 @@ import com.Nhom2.booking.entity.Review;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.i18n.Messages;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.repository.HotelRepository;
 import com.Nhom2.booking.repository.ReviewRepository;
@@ -50,6 +51,9 @@ class ReviewServiceTest {
 
     @Mock
     private NotificationService notificationService;
+
+    @Mock
+    private Messages messages;
 
     @InjectMocks
     private ReviewService reviewService;
@@ -139,10 +143,12 @@ class ReviewServiceTest {
 
     @Test
     void anonymousVisitorIsAskedToLogIn() {
+        when(messages.get("error.review.loginRequired")).thenReturn("Sign in to write a review.");
+
         ReviewEligibilityResponse result = reviewService.checkEligibility(null, 10L);
 
         assertThat(result.canReview()).isFalse();
-        assertThat(result.reason()).isNotBlank();
+        assertThat(result.reason()).isEqualTo("Sign in to write a review.");
     }
 
     @Test
@@ -150,7 +156,10 @@ class ReviewServiceTest {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user(1L, "alice")));
         when(bookingRepository.existsByUserIdAndHotelIdAndPaymentStatus(1L, 10L, PaymentStatus.PAID)).thenReturn(true);
 
-        assertThat(reviewService.checkEligibility("alice", 10L).canReview()).isTrue();
+        ReviewEligibilityResponse result = reviewService.checkEligibility("alice", 10L);
+
+        assertThat(result.canReview()).isTrue();
+        assertThat(result.reason()).isNull();
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.Nhom2.booking.service;
 
+import com.Nhom2.booking.exception.BusinessException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,7 +69,7 @@ public class ImageStorageService {
     /** Saves the image under {@code folder} and returns the URL to store and render. */
     public String store(MultipartFile file, String folder) {
         if (file == null || file.isEmpty()) {
-            throw new RuntimeException("File rỗng!");
+            throw new BusinessException("error.image.empty");
         }
         String extension = resolveImageExtension(file.getOriginalFilename());
         String objectPath = folder + "/" + UUID.randomUUID() + extension;
@@ -84,7 +85,7 @@ public class ImageStorageService {
         int dotIndex = originalName == null ? -1 : originalName.lastIndexOf('.');
         String extension = dotIndex < 0 ? "" : originalName.substring(dotIndex).toLowerCase(Locale.ROOT);
         if (!CONTENT_TYPES.containsKey(extension)) {
-            throw new RuntimeException("Chỉ chấp nhận ảnh định dạng: " + String.join(", ", CONTENT_TYPES.keySet()));
+            throw new BusinessException("error.image.unsupportedType", String.join(", ", CONTENT_TYPES.keySet()));
         }
         return extension;
     }

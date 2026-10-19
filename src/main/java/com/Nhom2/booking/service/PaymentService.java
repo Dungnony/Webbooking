@@ -6,6 +6,7 @@ import com.Nhom2.booking.entity.Booking;
 import com.Nhom2.booking.enums.BookingStatus;
 import com.Nhom2.booking.enums.PaymentStatus;
 import com.Nhom2.booking.event.BookingPaidEvent;
+import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
 import com.Nhom2.booking.repository.BookingRepository;
@@ -85,19 +86,16 @@ public class PaymentService {
 
         // Chỉ chủ booking mới được xem QR
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("You can only access your own booking");
+            throw new ForbiddenException("error.booking.notOwner");
         }
 
         // Chỉ booking CONFIRMED hoặc PENDING + UNPAID mới được thanh toán
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
-            throw new RuntimeException(
-                    "Booking must be pending or confirmed before payment. Current status: "
-                            + booking.getStatus()
-            );
+            throw new BusinessException("error.payment.notPayable");
         }
 
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new RuntimeException("Booking has already been paid");
+            throw new BusinessException("error.payment.alreadyPaid");
         }
 
         // Nội dung chuyển khoản: DH {bookingId}
@@ -136,15 +134,15 @@ public class PaymentService {
         Booking booking = getBooking(bookingId);
 
         if (!booking.getUser().getId().equals(user.getId())) {
-            throw new ForbiddenException("You can only access your own booking");
+            throw new ForbiddenException("error.booking.notOwner");
         }
 
         if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
-            throw new RuntimeException("Booking must be pending or confirmed before payment");
+            throw new BusinessException("error.payment.notPayable");
         }
 
         if (booking.getPaymentStatus() == PaymentStatus.PAID) {
-            throw new RuntimeException("Booking has already been paid");
+            throw new BusinessException("error.payment.alreadyPaid");
         }
 
         // Thông báo cho admin kiểm tra thanh toán
@@ -326,13 +324,13 @@ public class PaymentService {
 
     private Booking getBooking(Long bookingId) {
         return bookingRepository.findById(bookingId)
-                .orElseThrow(() -> new NotFoundException("Booking not found"));
+                .orElseThrow(() -> new NotFoundException("error.booking.notFound"));
     }
 
     private User getCurrentUser() {
         String username = SecurityContextHolder.getContext()
                 .getAuthentication().getName();
         return userRepository.findByUsername(username)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+                .orElseThrow(() -> new NotFoundException("error.user.notFound"));
     }
 }

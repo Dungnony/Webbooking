@@ -6,6 +6,7 @@ import { Tabs, Button, Empty, message, Modal, Spin } from 'antd';
 import { CalendarOutlined, CloseCircleOutlined, EyeOutlined, FilePdfOutlined, LoadingOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import BookingDetailModal from '../components/BookingDetailModal';
 import { getHotelImage } from '../utils/imageUtils';
 import { bookingApi, paymentApi, PaymentQr } from '../api';
 import type { Booking } from '../api-generated';
@@ -38,6 +39,16 @@ const statusConfig: Record<string, { labelKey: StatusLabelKey; color: string; cl
   CANCELLED: { labelKey: 'myBookings.status.cancelled', color: 'error', className: 'status-cancelled' },
 };
 
+const statusOf = (booking: Booking) => (booking.status && statusConfig[booking.status]) || statusConfig.PENDING;
+
+type PaymentLabelKey = 'confirmation.paid' | 'myBookings.refunded' | 'myBookings.unpaid';
+
+const paymentLabelKey = (booking: Booking): PaymentLabelKey => {
+  if (booking.paymentStatus === 'PAID') return 'confirmation.paid';
+  if (booking.paymentStatus === 'REFUNDED') return 'myBookings.refunded';
+  return 'myBookings.unpaid';
+};
+
 // Route is wrapped in <AuthGuard> in App.tsx.
 const MyBookingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -46,6 +57,7 @@ const MyBookingsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [cancellingId, setCancellingId] = useState<number | null>(null);
+  const [viewingBooking, setViewingBooking] = useState<Booking | null>(null);
 
   const [paymentModalVisible, setPaymentModalVisible] = useState(false);
   const [paymentQrData, setPaymentQrData] = useState<PaymentQr | null>(null);
@@ -177,7 +189,7 @@ const MyBookingsPage: React.FC = () => {
   });
 
   const BookingCard = ({ booking }: { booking: Booking }) => {
-    const config = (booking.status && statusConfig[booking.status]) || statusConfig.PENDING;
+    const config = statusOf(booking);
     const checkIn = booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString(dateLocale()) : '—';
     const checkOut = booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString(dateLocale()) : '—';
     const bookingId = booking.id;
@@ -233,7 +245,7 @@ const MyBookingsPage: React.FC = () => {
                 {(booking.totalPrice || 0).toLocaleString('vi-VN')}₫
               </div>
               <div style={{ fontSize: 12, color: '#595959' }}>
-                {booking.paymentStatus === 'PAID' ? t('confirmation.paid') : t('myBookings.unpaid')}
+                {t(paymentLabelKey(booking))}
               </div>
             </div>
 
@@ -250,7 +262,7 @@ const MyBookingsPage: React.FC = () => {
               <Button
                 size="small"
                 icon={<EyeOutlined />}
-                onClick={() => navigate(`/my-bookings/${bookingId}`)}
+                onClick={() => setViewingBooking(booking)}
               >
                 {t('myBookings.view')}
               </Button>
@@ -356,6 +368,13 @@ const MyBookingsPage: React.FC = () => {
         </div>
 
         <Footer />
+
+        <BookingDetailModal
+          booking={viewingBooking}
+          statusLabel={viewingBooking ? t(statusOf(viewingBooking).labelKey) : ''}
+          paymentLabel={viewingBooking ? t(paymentLabelKey(viewingBooking)) : ''}
+          onClose={() => setViewingBooking(null)}
+        />
 
         <Modal
           title={t('myBookings.qrModalTitle')}

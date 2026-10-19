@@ -41,7 +41,7 @@ public class ImageController {
             @RequestParam("file") MultipartFile file
     ) {
         Hotel hotel = hotelRepository.findById(hotelId)
-                .orElseThrow(() -> new NotFoundException("Hotel not found: " + hotelId));
+                .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
 
         String imageUrl = imageStorage.store(file, "hotels");
         hotel.setImageUrl(imageUrl);
@@ -63,7 +63,7 @@ public class ImageController {
             @RequestParam("file") MultipartFile file
     ) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new NotFoundException("Room not found: " + roomId));
+                .orElseThrow(() -> new NotFoundException("error.room.notFound"));
 
         String imageUrl = imageStorage.store(file, "rooms");
 
