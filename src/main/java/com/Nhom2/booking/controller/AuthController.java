@@ -16,20 +16,9 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final UserService userService;
-    private final com.Nhom2.booking.repository.UserRepository userRepository;
 
-    public AuthController(UserService userService, com.Nhom2.booking.repository.UserRepository userRepository) {
+    public AuthController(UserService userService) {
         this.userService = userService;
-        this.userRepository = userRepository;
-    }
-
-    @GetMapping("/debug/{username}")
-    public ResponseEntity<?> debug(@PathVariable String username) {
-        var user = userRepository.findByUsername(username);
-        if (user.isPresent()) {
-            return ResponseEntity.ok(java.util.Map.of("exists", true, "passwordHash", user.get().getPassword()));
-        }
-        return ResponseEntity.ok(java.util.Map.of("exists", false));
     }
 
     // Đăng ký -> gửi OTP

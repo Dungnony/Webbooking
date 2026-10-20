@@ -1,0 +1,164 @@
+==============================================================
+  WEB BOOKING - DANH SÁCH VIỆC DEVOPS CẦN LÀM TIẾP
+  Cập nhật: 20/10/2026
+==============================================================
+
+Ký hiệu:  [x] đã xong    [ ] chưa làm    (!) quan trọng, làm trước
+
+--------------------------------------------------------------
+ĐÃ XONG
+--------------------------------------------------------------
+[x] Chạy được dự án trên máy (backend :8080, frontend :5173)
+[x] Chuyển dữ liệu Supabase -> PostgreSQL trên máy (database "webbooking")
+    Bản dump: database/webbooking_dump.sql (không commit vì có dữ liệu người dùng)
+[x] Sửa đăng nhập Google (Client ID trong frontend/.env, cổng 5173, CORS)
+[x] Sửa nút "Xuất Báo Cáo Excel" gọi /proxy thay vì localhost:8080
+[x] Viết workflow CI: .github/workflows/ci.yml
+[x] Chuyển mật khẩu/secret trong code sang .env (JWT_SECRET mới, Test.java)
+    và tạo .env.example (file mẫu, không chứa giá trị thật)
+[x] Đổi mật khẩu database Supabase
+
+
+--------------------------------------------------------------
+1. LÀM NGAY (trước lần deploy tới)
+--------------------------------------------------------------
+[ ] (!) 1.1 Đổi nốt các bí mật đã lộ trên GitHub (repo đang public)
+        - Gmail App Password (myaccount.google.com/apppasswords): tạo mới, xóa cái cũ
+        - Sepay API key: tạo key mới
+        - Supabase: xóa các key sb_secret_ không dùng (đã gửi qua chat)
+        Vì sao: application.properties cũ trên GitHub chứa các giá trị này.
+        Xóa file không xóa được lịch sử git -> chỉ có cách đổi.
+
+[ ] (!) 1.2 Khai báo biến môi trường trên Railway (Service -> Variables)
+        SPRING_DATASOURCE_URL       (cổng 5432 Session Pooler + ?prepareThreshold=0,
+                                     KHÔNG dùng cổng 6543)
+        SPRING_DATASOURCE_USERNAME
+        SPRING_DATASOURCE_PASSWORD  (mật khẩu mới)
+        JWT_SECRET                  (>= 32 ký tự; thiếu là backend không khởi động)
+        SEPAY_API_KEY               (để trống = webhook KHÔNG kiểm tra key!)
+        SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD
+        GOOGLE_CLIENT_ID
+        SUPABASE_KEY                (sb_secret_...; thiếu thì ảnh upload lưu vào ổ đĩa
+                                     server và mất khi deploy lại)
+        Tạo JWT_SECRET ngẫu nhiên:
+          node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+
+[ ] (!) 1.3 Khai báo biến trên Vercel (Settings -> Environment Variables)
+        VITE_GOOGLE_CLIENT_ID
+
+[ ] (!) 1.4 Commit + push phần CI và .env
+        git add .github/workflows/ci.yml .env.example .gitignore Test.java
+        git add src/main/java/com/Nhom2/booking/security/JwtUtil.java
+        git add -f src/main/resources/application.properties
+        git commit -m "chore: chuyen mat khau sang .env, them CI"
+        git push origin main
+        - Các file khác đang sửa (SecurityConfig, AdminOverview, AuthController,
+          MailService, OtpService, UserService, AsyncConfig): xem lại rồi commit riêng.
+        - Sau khi deploy: mọi người phải đăng nhập lại (khóa JWT đã đổi).
+
+[ ] 1.5 Mở tab Actions trên GitHub, kiểm tra 3 job đều xanh
+        (job "Docker image" chưa chạy thử được trên máy -> xem kỹ lần chạy đầu)
+
+
+--------------------------------------------------------------
+2. HOÀN THIỆN CI/CD
+--------------------------------------------------------------
+[ ] 2.1 Bảo vệ nhánh main (cần quyền admin repo)
+        GitHub -> Settings -> Branches -> thêm rule cho "main":
+        - Require a pull request before merging
+        - Require status checks to pass: chọn
+          "Backend (build & test)", "Frontend (build)", "Docker image"
+          (các check chỉ hiện ra sau khi workflow đã chạy ít nhất 1 lần)
+
+[ ] 2.2 Railway -> Settings -> bật "Wait for CI"
+        -> chỉ deploy backend khi CI chạy xanh
+
+[ ] 2.3 Vercel -> kiểm tra Root Directory = frontend, Production Branch = main
+
+[ ] 2.4 Đổi cách làm việc của nhóm:
+        tạo nhánh -> push -> mở Pull Request -> chờ CI xanh + xem link Preview
+        của Vercel -> Merge -> Railway và Vercel tự deploy
+
+[ ] 2.5 Sửa 179 lỗi lint của frontend, xong thì xóa dòng "continue-on-error"
+        ở bước Lint trong ci.yml (để lint chặn được code lỗi)
+
+[ ] 2.6 Viết thêm test (hiện chỉ có 1 test contextLoads):
+        đặt phòng, chống đặt trùng phòng, thanh toán/webhook, đăng nhập
+
+
+--------------------------------------------------------------
+3. LỖI CẦN SỬA TRƯỚC KHI CHẠY THẬT
+--------------------------------------------------------------
+[x] 3.1 Ảnh chuyển sang Supabase Storage (bucket public "images")
+        - Ảnh cũ: tải từ Google Drive, nén còn tối đa 1600px, upload lên bucket,
+          đổi link trong DB
+        - Ảnh mới upload trong admin: StorageService.java lưu thẳng lên Supabase
+          (cần SUPABASE_KEY trên Railway, xem mục 1.2)
+
+[ ] (!) 3.2 Webhook Sepay đang CHO QUA khi chưa có SEPAY_API_KEY
+        -> ai cũng gửi được webhook giả để đánh dấu booking "đã thanh toán"
+        Cách sửa: PaymentService.java, hàm kiểm tra key -> trả về false khi key trống
+
+[ ] (!) 3.3 Đăng nhập Google không kiểm tra chữ ký token (UserService.java)
+        -> có thể tự tạo token giả mang email admin để vào trang quản trị
+        Cách sửa: dùng thư viện google-api-client (GoogleIdTokenVerifier)
+
+[ ] 3.4 Gỡ node_modules và dist khỏi git (36.369 / 36.521 file trong repo)
+        (frontend/.gitignore đã có sẵn, chỉ cần bỏ theo dõi)
+        git rm -r --cached frontend/node_modules frontend/dist
+        git commit -m "chore: bo node_modules khoi git"
+
+[ ] 3.5 Trang Tổng quan admin đang hiện số liệu giả (AdminOverview.tsx)
+        Doanh thu luôn 845.000.000đ (thật: đọc trường paidRevenue),
+        số booking < 50 bị đổi thành 145, biểu đồ cộng thêm doanh thu giả
+
+[ ] 3.6 Nhiều tài khoản trùng email (vd 5 tài khoản cùng 1 email, có 1 ADMIN)
+        -> đăng nhập Google chọn tài khoản không xác định. Nên đặt email là duy nhất.
+
+
+--------------------------------------------------------------
+4. VẬN HÀNH (nên có)
+--------------------------------------------------------------
+[ ] 4.1 Health check: thêm spring-boot-starter-actuator -> /actuator/health
+        Cấu hình Railway healthcheck để tự khởi động lại khi app treo.
+        Thêm UptimeRobot (miễn phí) để báo khi web sập.
+
+[ ] 4.2 Flyway: quản lý thay đổi bảng bằng file SQL có đánh số
+        (V1__init.sql lấy từ bản dump, V2__..., V3__...), sau đó tắt ddl-auto=update
+
+[ ] 4.3 Backup database định kỳ: GitHub Actions chạy pg_dump theo lịch (vd mỗi ngày)
+
+[ ] 4.4 Supabase gói free tự tạm dừng sau ~7 ngày không dùng
+        -> nhớ vào bấm Restore, hoặc chuyển DB sang Railway Postgres / Neon
+
+[ ] 4.5 docker-compose.yml cho môi trường dev:
+        "docker compose up" chạy cả PostgreSQL + backend + frontend
+
+[ ] 4.6 Tách cấu hình dev / prod bằng Spring profiles; đưa danh sách CORS
+        và OpenAI key (đang lưu trong bảng app_config) ra biến môi trường
+
+[ ] 4.7 Theo dõi lỗi: xem log trên Railway, có thể thêm Sentry
+
+
+--------------------------------------------------------------
+5. KHI DỰ ÁN LỚN (chưa cần làm bây giờ)
+--------------------------------------------------------------
+- Trước tiên: tổ chức code thành "modular monolith"
+  (mỗi package một nghiệp vụ, không gọi chéo lung tung)
+- Khi đội đông / tải lớn / cần deploy riêng từng phần thì tách dần:
+    tách trước: Notification (gửi mail), Payment (Sepay)
+    tách sau:   Booking, Catalog (khách sạn/phòng), Auth/User, AI Chat, Report
+- Hạ tầng đi kèm: API Gateway, RabbitMQ/Kafka, mỗi service một database,
+  Kubernetes, Prometheus + Grafana, Loki/ELK, OpenTelemetry + Jaeger
+
+
+--------------------------------------------------------------
+GHI CHÚ CHẠY TRÊN MÁY
+--------------------------------------------------------------
+- Backend: mvnw spring-boot:run (tự đọc file .env ở thư mục gốc)
+  Cần JAVA_HOME trỏ tới JDK, vd C:\Users\ADMIN\.jdks\ms-25.0.4.1
+  Nếu gặp lỗi "ClassFormatError": chạy mvnw clean trước.
+- Frontend: cd frontend && npm run dev -> http://localhost:5173
+  (phải là cổng 5173 thì đăng nhập Google mới chạy)
+- Database trên máy: PostgreSQL 17, database "webbooking"
+- KHÔNG commit file .env. KHÔNG gửi mật khẩu / key qua chat.

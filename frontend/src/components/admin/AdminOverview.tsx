@@ -96,7 +96,7 @@ const AdminOverview: React.FC = () => {
       setExporting(true);
       const token = localStorage.getItem('token');
       // Tải file dạng blob để xử lý Auth header
-      const response = await fetch('http://localhost:8080/admin/reports/bookings.xlsx', {
+      const response = await fetch('/proxy/admin/reports/bookings.xlsx', {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`

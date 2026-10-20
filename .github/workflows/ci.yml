@@ -1,0 +1,124 @@
+# ============================================
+# CI - Tu dong build + test moi khi push / tao Pull Request vao main
+# CD - Railway (backend) va Vercel (frontend) tu deploy khi main thay doi;
+#      Railway bat "Wait for CI" de chi deploy khi workflow nay chay xanh.
+# ============================================
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: # cho phep bam chay tay tren tab Actions
+
+# Push moi len cung nhanh -> huy lan chay cu dang do dang
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ------------------------------------------
+  # Backend: compile + chay test voi PostgreSQL that (service container)
+  # ------------------------------------------
+  backend:
+    name: Backend (build & test)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: booking_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Cau hinh chi dung cho test, khong phai secret that
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/booking_test
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_MAIL_HOST: localhost
+      JWT_SECRET: ci-test-secret-chi-dung-cho-test-khong-dung-that
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      # mvnw trong git chua co quyen thuc thi (mode 100644)
+      - run: chmod +x mvnw
+
+      - name: Build & test
+        run: ./mvnw -B verify
+
+      - name: Luu file JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # ------------------------------------------
+  # Frontend: cai dependency + build giong Vercel (tsc && vite build)
+  # ------------------------------------------
+  frontend:
+    name: Frontend (build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # Code hien con nhieu loi lint co san -> chi canh bao, khong chan build.
+      # Sua het loi roi thi xoa dong continue-on-error.
+      - name: Lint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+
+  # ------------------------------------------
+  # Docker: kiem tra Dockerfile build duoc (Railway dung chinh file nay)
+  # ------------------------------------------
+  docker:
+    name: Docker image
+    needs: backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image (khong push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: webbooking-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

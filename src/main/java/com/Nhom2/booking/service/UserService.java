@@ -15,13 +15,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class UserService {
     private static final int MIN_PASSWORD_LENGTH = 8;
     private static final int MAX_PASSWORD_LENGTH = 72;
     private static final String PASSWORD_POLICY_MESSAGE =
             "Mật khẩu phải chứ từ 8-72 ký tự bào gồm chữ hoa, chữ thường, số , ký tự đặc biệt và không có khoảng trống.";
-    private final Map<String, RegisterRequest> pendingUsers = new HashMap<>();
+    private final Map<String, RegisterRequest> pendingUsers = new ConcurrentHashMap<>();
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final MailService mailService;

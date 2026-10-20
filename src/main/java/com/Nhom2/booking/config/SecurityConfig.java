@@ -78,6 +78,7 @@ public class SecurityConfig {
         // Cho phép các nguồn (Origins) nào được gọi tới Backend này
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:5080",
+                "http://localhost:5173",
                 "https://ript-1307-03-2026-nhom2-kthp.vercel.app",
                 "https://ript-1307-03-2026-nhom2-kthp.vercel.app/",
                 "https://ript1307-03-2026-nhom2-kthp.vercel.app",
