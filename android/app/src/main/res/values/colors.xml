@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="booking_dark_blue">#FF003B95</color>
+    <color name="booking_yellow">#FFFEBB02</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
