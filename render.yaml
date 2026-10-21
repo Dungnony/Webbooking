@@ -1,0 +1,39 @@
+# Render Blueprint for the Spring Boot backend (builds from the root Dockerfile).
+# Values marked sync: false are secrets: Render asks for them when the Blueprint is created.
+services:
+  - type: web
+    name: nhom2-booking-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      # Supabase session pooler allows 15 clients shared by every running backend.
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "5"
+      - key: JPA_DDL_AUTO
+        value: validate
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: SPRING_MAIL_USERNAME
+        sync: false
+      - key: SPRING_MAIL_PASSWORD
+        sync: false
+      - key: SEPAY_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: PAYMENT_BANK_ACCOUNT_NUMBER
+        sync: false
+      - key: PAYMENT_BANK_ACCOUNT_NAME
+        sync: false
