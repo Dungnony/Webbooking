@@ -18,4 +18,9 @@ public class PaymentQrResponse {
     private String accountName;
     private Double amount;
     private String transferContent;
+    /**
+     * Deeplink VietQR mo app ngan hang voi STK, so tien, noi dung dien san.
+     * Frontend noi them "&app=<ma app>&url=<link quay lai>".
+     */
+    private String bankAppDeeplink;
 }

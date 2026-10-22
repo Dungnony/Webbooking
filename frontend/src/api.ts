@@ -46,6 +46,8 @@ export interface PaymentQr {
   accountName: string;
   amount: number;
   transferContent: string;
+  /** VietQR deeplink without `app`/`url`; see utils/bankApps.ts */
+  bankAppDeeplink: string;
 }
 
 export interface ChatMessage {

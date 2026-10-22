@@ -1,35 +1,61 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Button, Spin, message, Divider } from 'antd';
-import { CheckCircleOutlined, CopyOutlined, LoadingOutlined } from '@ant-design/icons';
+import { Alert, Button, Segmented, Spin, message, Divider } from 'antd';
+import { BankOutlined, CheckCircleOutlined, CopyOutlined, LoadingOutlined, QrcodeOutlined } from '@ant-design/icons';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import BankAppPicker from '../components/BankAppPicker';
 import { paymentApi, bookingApi, PaymentQr } from '../api';
 import type { Booking } from '../api-generated';
 import type { BookingFlowState } from '../types/bookingFlow';
 import { getErrorMessage } from '../utils/errors';
+import { buildBankAppLink, detectMobilePlatform, type BankApp } from '../utils/bankApps';
 
 const PAYMENT_POLL_INTERVAL_MS = 3000;
 // Must match BookingExpiryService.PAYMENT_WINDOW on the backend.
 const PAYMENT_WINDOW_MINUTES = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+type PayMethod = 'qr' | 'bankApp';
+
+const nightsBetween = (from?: string, to?: string) =>
+  from && to ? Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) : undefined;
 
 const PaymentPage: React.FC = () => {
-  const state = useLocation().state as BookingFlowState | null;
+  const location = useLocation();
+  const state = location.state as BookingFlowState | null;
+  // Quay lại từ app ngân hàng (tham số url của deeplink): không có router state, chỉ có ?bookingId=
+  const queryBookingId = Number(new URLSearchParams(location.search).get('bookingId')) || undefined;
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [qrData, setQrData] = useState<PaymentQr | null>(null);
   const [loadingQr, setLoadingQr] = useState(true);
   const [confirming, setConfirming] = useState(false);
   const [currentBooking, setCurrentBooking] = useState<Booking | undefined>(state?.booking);
+  const [method, setMethod] = useState<PayMethod>('qr');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const platform = useMemo(() => detectMobilePlatform(navigator.userAgent), []);
 
   const booking = currentBooking;
-  const bookingId = booking?.id;
-  const hotel = state?.hotel;
-  const checkIn = state?.checkIn;
-  const checkOut = state?.checkOut;
-  const nights = state?.nights;
-  const totalPrice = state?.totalPrice;
+  const bookingId = booking?.id ?? queryBookingId;
+  const hotel = state?.hotel ?? booking?.hotel;
+  const checkIn = state?.checkIn ?? booking?.checkInDate;
+  const checkOut = state?.checkOut ?? booking?.checkOutDate;
+  const nights = state?.nights ?? nightsBetween(booking?.checkInDate, booking?.checkOutDate);
+  const totalPrice = state?.totalPrice ?? booking?.totalPrice;
+
+  // Mở lại trang bằng link ?bookingId= → tải booking của khách
+  useEffect(() => {
+    if (currentBooking || queryBookingId === undefined) return;
+    bookingApi.getMy()
+      .then(res => {
+        const found = res.data?.find(b => b.id === queryBookingId);
+        if (found) setCurrentBooking(found);
+        else navigate('/my-bookings');
+      })
+      .catch(() => navigate('/my-bookings'));
+  }, [currentBooking, queryBookingId, navigate]);
 
   // Tải QR thanh toán
   useEffect(() => {
@@ -49,32 +75,68 @@ const PaymentPage: React.FC = () => {
   // Tự động kiểm tra thanh toán (polling 3s)
   useEffect(() => {
     if (bookingId === undefined) return;
+    let done = false;
 
-    const interval = setInterval(async () => {
+    const checkPayment = async () => {
+      if (done) return;
       try {
         const res = await bookingApi.getMy();
         const updated = res.data?.find(b => b.id === bookingId);
-        if (!updated) return;
+        if (!updated || done) return;
 
         // Cập nhật trạng thái booking
         setCurrentBooking(updated);
 
         // Nếu đã thanh toán → chuyển trang xác nhận
         if (updated.paymentStatus === 'PAID') {
-          clearInterval(interval);
+          done = true;
           message.success(t('payment.paidAutomatically'));
-          navigate('/booking/confirmation', { state: { ...state, booking: updated } });
+          if (state) navigate('/booking/confirmation', { state: { ...state, booking: updated } });
+          else navigate('/my-bookings');
         }
       } catch (e) {
         console.warn('Payment status poll failed, retrying', e);
       }
-    }, PAYMENT_POLL_INTERVAL_MS);
+    };
 
-    return () => clearInterval(interval);
+    const interval = setInterval(checkPayment, PAYMENT_POLL_INTERVAL_MS);
+    // Khách quay lại từ app ngân hàng → kiểm tra ngay, không đợi vòng kế tiếp
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void checkPayment();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    return () => {
+      done = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [bookingId, navigate, state, t]);
 
   const handleCopy = (text: string, label: string) => {
     navigator.clipboard.writeText(text).then(() => message.success(t('payment.copied', { label })));
+  };
+
+  const handleSelectBankApp = (app: BankApp) => {
+    if (!qrData || bookingId === undefined) return;
+    setPickerOpen(false);
+    const returnUrl = `${window.location.origin}/booking/payment?bookingId=${bookingId}`;
+    const link = buildBankAppLink(qrData.bankAppDeeplink, app.appId, returnUrl);
+
+    if (!app.autofill) {
+      // App chỉ được mở lên: chép sẵn nội dung "DH <mã>" (Sepay dựa vào nội dung này để xác nhận đơn)
+      navigator.clipboard.writeText(qrData.transferContent).catch(() => undefined);
+      message.info(t('payment.bankApp.manualFill', {
+        content: qrData.transferContent,
+        account: qrData.accountNumber,
+      }), 8);
+    }
+
+    if (platform) {
+      window.location.href = link;
+    } else {
+      window.open(link, '_blank', 'noopener');
+    }
   };
 
   const handleConfirmPayment = async () => {
@@ -159,30 +221,74 @@ const PaymentPage: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          {/* QR Code */}
-          <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24, textAlign: 'center' }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>{t('payment.qrTitle')}</div>
-            {loadingQr ? (
-              <div style={{ padding: '40px 0' }}>
-                <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
-                <div style={{ marginTop: 12, color: '#595959', fontSize: 13 }}>{t('payment.qrLoading')}</div>
-              </div>
-            ) : qrData?.qrCodeUrl ? (
-              <>
-                <img
-                  src={qrData.qrCodeUrl}
-                  alt={t('payment.qrTitle')}
-                  style={{ width: '100%', maxWidth: 220, borderRadius: 8, border: '1px solid #e0e0e0' }}
-                />
-                <div style={{ marginTop: 12, fontSize: 12, color: '#008234', fontWeight: 600 }}>
-                  {t('payment.anyBankApp')}
+        {/* Chọn cách thanh toán */}
+        <Segmented
+          block
+          size="large"
+          value={method}
+          onChange={value => setMethod(value as PayMethod)}
+          options={[
+            { label: t('payment.method.qr'), value: 'qr', icon: <QrcodeOutlined /> },
+            { label: t('payment.method.bankApp'), value: 'bankApp', icon: <BankOutlined /> },
+          ]}
+          style={{ marginBottom: 16 }}
+        />
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+          {method === 'qr' ? (
+            /* QR Code */
+            <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24, textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 16, color: '#1a1a1a' }}>{t('payment.qrTitle')}</div>
+              {loadingQr ? (
+                <div style={{ padding: '40px 0' }}>
+                  <Spin indicator={<LoadingOutlined style={{ fontSize: 36 }} spin />} />
+                  <div style={{ marginTop: 12, color: '#595959', fontSize: 13 }}>{t('payment.qrLoading')}</div>
                 </div>
-              </>
-            ) : (
-              <div style={{ padding: '20px 0', color: '#ff4d4f' }}>{t('payment.qrUnavailable')}</div>
-            )}
-          </div>
+              ) : qrData?.qrCodeUrl ? (
+                <>
+                  <img
+                    src={qrData.qrCodeUrl}
+                    alt={t('payment.qrTitle')}
+                    style={{ width: '100%', maxWidth: 220, borderRadius: 8, border: '1px solid #e0e0e0' }}
+                  />
+                  <div style={{ marginTop: 12, fontSize: 12, color: '#008234', fontWeight: 600 }}>
+                    {t('payment.anyBankApp')}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '20px 0', color: '#ff4d4f' }}>{t('payment.qrUnavailable')}</div>
+              )}
+            </div>
+          ) : (
+            /* App ngân hàng: mở app với thông tin chuyển khoản điền sẵn */
+            <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24, textAlign: 'center' }}>
+              <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12, color: '#1a1a1a' }}>{t('payment.bankApp.title')}</div>
+              <BankOutlined style={{ fontSize: 40, color: '#006ce4', marginBottom: 12 }} />
+              <p style={{ fontSize: 13, color: '#595959', marginBottom: 16 }}>{t('payment.bankApp.description')}</p>
+              {!platform && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t('payment.bankApp.desktopHint')}
+                  style={{ marginBottom: 16, textAlign: 'left', fontSize: 12 }}
+                />
+              )}
+              <Button
+                type="primary"
+                size="large"
+                block
+                icon={<BankOutlined />}
+                disabled={!qrData}
+                onClick={() => setPickerOpen(true)}
+                style={{ background: '#006ce4', fontWeight: 700 }}
+              >
+                {t('payment.bankApp.choose')}
+              </Button>
+              <div style={{ marginTop: 12, fontSize: 12, color: '#008234', fontWeight: 600 }}>
+                {t('payment.bankApp.autoConfirm')}
+              </div>
+            </div>
+          )}
 
           {/* Transfer info */}
           <div style={{ background: '#fff', border: '1px solid #e7e7e7', borderRadius: 12, padding: 24 }}>
@@ -252,10 +358,10 @@ const PaymentPage: React.FC = () => {
         </div>
 
         {/* Action buttons */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 20 }}>
           <Button
             size="large"
-            style={{ flex: 1, height: 52 }}
+            style={{ flex: '1 1 140px', height: 52 }}
             onClick={() => navigate('/my-bookings')}
           >
             {t('payment.payLater')}
@@ -265,13 +371,20 @@ const PaymentPage: React.FC = () => {
             size="large"
             icon={<CheckCircleOutlined />}
             loading={confirming}
-            style={{ flex: 2, height: 52, fontSize: 15, fontWeight: 700, background: '#006ce4' }}
+            style={{ flex: '2 1 240px', height: 52, fontSize: 15, fontWeight: 700, background: '#006ce4' }}
             onClick={handleConfirmPayment}
           >
             {t('payment.manualConfirm')}
           </Button>
         </div>
       </div>
+
+      <BankAppPicker
+        open={pickerOpen}
+        platform={platform ?? 'android'}
+        onClose={() => setPickerOpen(false)}
+        onSelect={handleSelectBankApp}
+      />
 
       <Footer />
     </div>

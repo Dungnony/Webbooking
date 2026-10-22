@@ -38,6 +38,9 @@ public class PaymentService {
     // TPBank BIN code theo chuẩn VietQR
     private static final String BANK_BIN = "970423";
 
+    // Mã ngân hàng nhận tiền (TPBank) trong deeplink VietQR: ba=<STK>@<mã>
+    private static final String BANK_DEEPLINK_CODE = "tpb";
+
     // Pattern để trích xuất booking ID từ nội dung chuyển khoản
     // Tìm "DH" theo sau bởi số, ví dụ: "DH 123", "DH123", "DH  123"
     private static final Pattern BOOKING_ID_PATTERN =
@@ -113,9 +116,22 @@ public class PaymentService {
                 URLEncoder.encode(accountName, StandardCharsets.UTF_8)
         );
 
+        // Deeplink VietQR (https://www.vietqr.io/danh-sach-api/deeplink-app-ngan-hang):
+        // mở app ngân hàng của khách với STK, số tiền, nội dung đã điền sẵn.
+        // Frontend nối thêm &app=<mã app khách chọn>&url=<link quay lại trang thanh toán>.
+        String bankAppDeeplink = String.format(
+                "https://dl.vietqr.io/pay?ba=%s@%s&am=%d&tn=%s&bn=%s",
+                accountNumber,
+                BANK_DEEPLINK_CODE,
+                amount,
+                URLEncoder.encode(transferContent, StandardCharsets.UTF_8),
+                URLEncoder.encode(accountName, StandardCharsets.UTF_8)
+        );
+
         PaymentQrResponse response = new PaymentQrResponse();
         response.setBookingId(bookingId);
         response.setQrCodeUrl(qrCodeUrl);
+        response.setBankAppDeeplink(bankAppDeeplink);
         response.setBankName(bankName);
         response.setAccountNumber(accountNumber);
         response.setAccountName(accountName);
