@@ -4,11 +4,41 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch: # cho phep bam chay tay tren tab Actions
+
+# Push moi len cung nhanh -> huy lan chay cu dang do dang
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+
+    # PostgreSQL that de chay ca BackendcuoikyApplicationTests (khoi dong ca app + Flyway V1..Vn tren DB trong)
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: booking_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Cau hinh chi dung cho test, khong phai secret that
+    env:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/booking_test
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      JWT_SECRET: ci-test-secret-chi-dung-cho-test-khong-dung-that
+
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -16,11 +46,18 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
-      - name: Unit and security tests
-        # BackendcuoikyApplicationTests boots the whole app against the configured database, so it is excluded.
+
+      - name: All tests (unit, security, app boot + Flyway)
         run: |
           chmod +x mvnw
-          ./mvnw -B test "-Dtest=!BackendcuoikyApplicationTests" -Dsurefire.failIfNoSpecifiedTests=false
+          ./mvnw -B verify
+
+      - name: Luu file JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jar
+          path: target/*.jar
+          retention-days: 7
 
   frontend:
     name: Frontend lint, test and build
@@ -39,3 +76,20 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+
+  # Kiem tra Dockerfile build duoc (Render/Railway dung chinh file nay)
+  docker:
+    name: Docker image
+    needs: backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image (khong push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: webbooking-backend:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

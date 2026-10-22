@@ -1,0 +1,81 @@
+==============================================================
+  WEB BOOKING - DANH SÁCH VIỆC DEVOPS
+  Cập nhật: 22/10/2026 (sau khi gộp code của Dũng vào repo chính)
+==============================================================
+
+Ký hiệu:  [x] đã xong    [ ] chưa làm    (!) quan trọng, làm trước
+
+Kiến trúc khi deploy:
+  Người dùng -> Vercel (React, thư mục frontend)
+                  |-- /proxy/*  --> Render backend (Spring Boot, Dockerfile)
+                  |-- WebSocket --> wss://<backend>/ws (Vercel không chuyển tiếp WS)
+  Render backend -> Supabase Postgres (Flyway quản lý schema)
+                 -> Supabase Storage (bucket public "images")
+
+--------------------------------------------------------------
+ĐÃ XONG
+--------------------------------------------------------------
+[x] CI (GitHub Actions): toàn bộ test backend với PostgreSQL thật (gồm Flyway),
+    lint + test + build frontend, build thử Docker image
+[x] Flyway quản lý schema (V1..V5), tự baseline trên DB đã có dữ liệu
+[x] Ảnh khách sạn/phòng nằm trên Supabase Storage; ảnh upload mới lưu lên Supabase
+[x] Mật khẩu/khóa không còn viết trong code: application.properties chỉ đọc biến
+    môi trường hoặc file .env (xem .env.example)
+[x] Khóa JWT lấy từ JWT_SECRET (thiếu -> khóa ngẫu nhiên, người dùng phải đăng nhập lại
+    mỗi lần server khởi động lại)
+[x] Xác thực token Google, webhook Sepay từ chối khi thiếu key, giới hạn số lần đăng nhập/OTP
+[x] Gỡ node_modules / dist khỏi git
+[x] Lombok 1.18.48 (chạy được với JDK 25 trong IntelliJ)
+[x] Upload ảnh tối đa 5 MB (mặc định Spring chỉ 1 MB)
+[x] Frontend trỏ về backend Render (frontend/vercel.json, frontend/.env.production)
+
+
+--------------------------------------------------------------
+1. DEPLOY
+--------------------------------------------------------------
+[ ] (!) 1.1 Render (backend) -> Environment:
+        SPRING_DATASOURCE_URL   jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres?prepareThreshold=0
+                                (cổng 5432 + prepareThreshold=0; cổng 6543 gây lỗi
+                                 "prepared statement already exists")
+        SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
+        JWT_SECRET              (>= 32 ký tự ngẫu nhiên)
+        SUPABASE_KEY            (sb_secret_...)
+        SEPAY_API_KEY
+        SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD
+[ ] (!) 1.2 Lần deploy đầu với code mới sẽ:
+        - chạy Flyway trên DB Supabase (baseline v1 + V2..V5)
+        - tự hủy các booking PENDING chưa thanh toán quá 30 phút
+[ ] 1.3 Vercel (frontend): Root Directory = frontend, Framework = Vite.
+        Không cần biến môi trường (đã có frontend/.env.production).
+[ ] 1.4 Kiểm tra sau deploy: <backend>/hotels trả JSON; web Vercel có ảnh,
+        đăng nhập Google, vào /admin, chat hỗ trợ.
+
+
+--------------------------------------------------------------
+2. DỮ LIỆU
+--------------------------------------------------------------
+[ ] 2.1 Dọn email trùng (nhiều tài khoản cùng 1 email) và đánh giá trùng
+        (1 người đánh giá 1 khách sạn nhiều lần), rồi thêm migration V6 tạo
+        unique index (V2 đã bỏ qua vì dữ liệu đang trùng)
+[ ] 2.2 Ảnh phòng #261 (phòng Deluxe, khách sạn 8): file Drive gốc đã mất -> upload ảnh khác
+[ ] 2.3 Backup DB định kỳ: GitHub Actions chạy pg_dump theo lịch
+
+
+--------------------------------------------------------------
+3. VẬN HÀNH
+--------------------------------------------------------------
+[ ] 3.1 Render gói free ngủ sau 15 phút không dùng -> request đầu mất ~50 giây,
+        job tự hủy booking và chat không chạy khi đang ngủ.
+        Cách: UptimeRobot gọi <backend>/ mỗi 10 phút, hoặc nâng gói trả phí.
+[ ] 3.2 Khi schema đã ổn định: đặt JPA_DDL_AUTO=validate trên Render
+[ ] 3.3 Bảo vệ nhánh main: bắt buộc Pull Request + CI xanh trước khi merge
+[ ] 3.4 Supabase gói free tự tạm dừng sau ~7 ngày không dùng -> nhớ vào bấm Restore
+
+
+--------------------------------------------------------------
+GHI CHÚ CHẠY TRÊN MÁY
+--------------------------------------------------------------
+- Backend: mvnw spring-boot:run (tự đọc file .env ở thư mục gốc, xem .env.example)
+- Frontend: cd frontend && npm install && npm run dev -> http://localhost:5173
+  (Vite chuyển /proxy và /ws sang localhost:8080)
+- KHÔNG commit file .env.

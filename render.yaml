@@ -37,3 +37,9 @@ services:
         sync: false
       - key: PAYMENT_BANK_ACCOUNT_NAME
         sync: false
+      # Khoa ky token dang nhap: Render tu sinh chuoi ngau nhien
+      - key: JWT_SECRET
+        generateValue: true
+      # Bucket dang chua anh khach san/phong tren Supabase Storage
+      - key: SUPABASE_STORAGE_BUCKET
+        value: images

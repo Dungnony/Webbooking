@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/proxy/:path*",
-      "destination": "https://ript1307-03-2026-nhom2-kthp-production.up.railway.app/:path*"
+      "destination": "https://webbooking-c5iu.onrender.com/:path*"
     },
     {
       "source": "/uploads/:path*",
-      "destination": "https://ript1307-03-2026-nhom2-kthp-production.up.railway.app/uploads/:path*"
+      "destination": "https://webbooking-c5iu.onrender.com/uploads/:path*"
     },
     {
       "source": "/(.*)",
