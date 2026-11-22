@@ -9,10 +9,45 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 
 public interface BookingRoomRepository extends JpaRepository<BookingRoom, Long> {
 
     boolean existsByRoomId(Long roomId);
+
+    @Query("""
+            select br
+            from BookingRoom br
+            join fetch br.booking b
+            where br.room = :room
+              and b.status in :statuses
+              and b.checkInDate < :checkOut
+              and b.checkOutDate > :checkIn
+            """)
+    List<BookingRoom> findOverlappingReservations(
+            @Param("room") Room room,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") Collection<BookingStatus> statuses
+    );
+
+    @Query("""
+            select br
+            from BookingRoom br
+            join fetch br.booking b
+            where br.room = :room
+              and b.id <> :bookingId
+              and b.status in :statuses
+              and b.checkInDate < :checkOut
+              and b.checkOutDate > :checkIn
+            """)
+    List<BookingRoom> findOverlappingReservationsExcludingBooking(
+            @Param("room") Room room,
+            @Param("bookingId") Long bookingId,
+            @Param("checkIn") LocalDate checkIn,
+            @Param("checkOut") LocalDate checkOut,
+            @Param("statuses") Collection<BookingStatus> statuses
+    );
 
     @Query("""
             select coalesce(sum(br.quantity), 0)

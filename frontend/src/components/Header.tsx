@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Popover, Badge, List, Typography, Spin, Tooltip, Modal, message } from 'antd';
-import { BellOutlined, DeleteOutlined, SyncOutlined, CheckOutlined, DownOutlined, HeartOutlined, CarryOutOutlined } from '@ant-design/icons';
+import { BellOutlined, DeleteOutlined, SyncOutlined, CheckOutlined, HeartOutlined, CarryOutOutlined } from '@ant-design/icons';
 import { useWishlist } from '../context/useWishlist';
 import { notificationApi, userApi } from '../api';
 import type { Notification } from '../api-generated';
@@ -195,11 +195,6 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
           )}
         />
       )}
-      {notifications.length > 0 && (
-        <div style={{ padding: '12px', textAlign: 'center', color: '#c00000', cursor: 'pointer', fontSize: 14 }}>
-          <DownOutlined style={{ marginRight: 4 }} /> {t('header.loadMore')}
-        </div>
-      )}
     </div>
   );
 
@@ -233,9 +228,8 @@ const Header: React.FC<HeaderProps> = ({ fullWidth }) => {
       <div style={{ borderTop: '1px solid #e7e7e7' }} />
       <div className="bk-popover-item" onClick={() => navigate('/profile')}>{t('header.myProfile')}</div>
 
-      {/* Hiện menu Admin trên mobile */}
       {isAdmin && (
-        <div className="bk-popover-item mobile-only-flex" onClick={() => navigate('/admin')} style={{ fontWeight: 700, color: '#006ce4' }}>
+        <div className="bk-popover-item" onClick={() => navigate('/admin')} style={{ fontWeight: 700, color: '#006ce4' }}>
           {t('header.adminDashboard')}
         </div>
       )}

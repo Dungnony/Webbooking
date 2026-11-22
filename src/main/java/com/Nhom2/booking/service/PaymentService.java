@@ -9,11 +9,14 @@ import com.Nhom2.booking.event.BookingPaidEvent;
 import com.Nhom2.booking.exception.BusinessException;
 import com.Nhom2.booking.exception.ForbiddenException;
 import com.Nhom2.booking.exception.NotFoundException;
+import com.Nhom2.booking.exception.TooManyRequestsException;
 import com.Nhom2.booking.repository.BookingRepository;
 import com.Nhom2.booking.entity.User;
 import com.Nhom2.booking.repository.UserRepository;
+import com.Nhom2.booking.security.RateLimiter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -41,10 +46,9 @@ public class PaymentService {
     // Mã ngân hàng nhận tiền (TPBank) trong deeplink VietQR: ba=<STK>@<mã>
     private static final String BANK_DEEPLINK_CODE = "tpb";
 
-    // Pattern để trích xuất booking ID từ nội dung chuyển khoản
-    // Tìm "DH" theo sau bởi số, ví dụ: "DH 123", "DH123", "DH  123"
+    // Pattern để trích xuất booking ID từ nội dung chuyển khoản (có ranh giới ký tự tránh khớp nhầm mã khác)
     private static final Pattern BOOKING_ID_PATTERN =
-            Pattern.compile("DH\\s*(\\d+)", Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(?<![A-Z0-9])DH\\s*(\\d+)(?!\\d)", Pattern.CASE_INSENSITIVE);
 
     @Value("${payment.bank.name:TPBank}")
     private String bankName;
@@ -65,6 +69,22 @@ public class PaymentService {
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final ApplicationEventPublisher eventPublisher;
+    private final RateLimiter rateLimiter;
+
+    @Autowired
+    public PaymentService(
+            BookingRepository bookingRepository,
+            UserRepository userRepository,
+            NotificationService notificationService,
+            ApplicationEventPublisher eventPublisher,
+            RateLimiter rateLimiter
+    ) {
+        this.bookingRepository = bookingRepository;
+        this.userRepository = userRepository;
+        this.notificationService = notificationService;
+        this.eventPublisher = eventPublisher;
+        this.rateLimiter = rateLimiter != null ? rateLimiter : new RateLimiter(Clock.systemUTC());
+    }
 
     public PaymentService(
             BookingRepository bookingRepository,
@@ -72,10 +92,7 @@ public class PaymentService {
             NotificationService notificationService,
             ApplicationEventPublisher eventPublisher
     ) {
-        this.bookingRepository = bookingRepository;
-        this.userRepository = userRepository;
-        this.notificationService = notificationService;
-        this.eventPublisher = eventPublisher;
+        this(bookingRepository, userRepository, notificationService, eventPublisher, new RateLimiter(Clock.systemUTC()));
     }
 
     /**
@@ -161,6 +178,10 @@ public class PaymentService {
             throw new BusinessException("error.payment.alreadyPaid");
         }
 
+        if (!rateLimiter.tryAcquire("confirm-pay:" + user.getUsername() + ":" + bookingId, 3, Duration.ofMinutes(15))) {
+            throw new TooManyRequestsException("error.login.locked");
+        }
+
         // Thông báo cho admin kiểm tra thanh toán
         notificationService.notifyAdmins(
                 "notification.paymentReported.title", "notification.paymentReported.body",
@@ -226,6 +247,13 @@ public class PaymentService {
             return false;
         }
 
+        if (accountNumber != null && !accountNumber.isBlank()
+                && request.getAccountNumber() != null && !request.getAccountNumber().isBlank()
+                && !accountNumber.trim().equals(request.getAccountNumber().trim())) {
+            log.warn("[Webhook] Skipped: accountNumber mismatch");
+            return false;
+        }
+
         String content = request.getContent();
         if (content == null || content.isBlank()) {
             log.info("[Webhook] Skipped: empty transfer content");
@@ -286,6 +314,9 @@ public class PaymentService {
 
         // ✅ TỰ ĐỘNG XÁC NHẬN THANH TOÁN
         booking.setPaymentStatus(PaymentStatus.PAID);
+        if (booking.getStatus() == BookingStatus.PENDING) {
+            booking.setStatus(BookingStatus.CONFIRMED);
+        }
         bookingRepository.save(booking);
         eventPublisher.publishEvent(new BookingPaidEvent(bookingId));
 

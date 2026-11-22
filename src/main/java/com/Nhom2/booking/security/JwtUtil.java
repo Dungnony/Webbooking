@@ -54,23 +54,19 @@ public class JwtUtil {
                 .compact();
     }
 
-    public String extractUsername(String token) {
-
+    public Claims parseClaims(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
-                .getBody()
-                .getSubject();
+                .getBody();
+    }
+
+    public String extractUsername(String token) {
+        return parseClaims(token).getSubject();
     }
 
     public String extractRole(String token) {
-
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(token)
-                .getBody()
-                .get("role", String.class);
+        return parseClaims(token).get("role", String.class);
     }
 }

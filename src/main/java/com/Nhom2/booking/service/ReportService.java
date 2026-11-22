@@ -7,6 +7,7 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -21,6 +22,7 @@ public class ReportService {
         this.bookingRepository = bookingRepository;
     }
 
+    @Transactional(readOnly = true)
     public byte[] exportBookingsExcel() {
         try (Workbook workbook = new XSSFWorkbook();
              ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
@@ -49,9 +51,9 @@ public class ReportService {
                 Booking booking = bookings.get(i);
                 Row row = sheet.createRow(i + 1);
 
-                row.createCell(0).setCellValue(booking.getId());
-                row.createCell(1).setCellValue(booking.getUser().getUsername());
-                row.createCell(2).setCellValue(booking.getHotel().getName());
+                row.createCell(0).setCellValue(booking.getId() != null ? booking.getId() : 0L);
+                row.createCell(1).setCellValue(sanitizeCell(booking.getUser() != null ? booking.getUser().getUsername() : ""));
+                row.createCell(2).setCellValue(sanitizeCell(booking.getHotel() != null ? booking.getHotel().getName() : ""));
                 row.createCell(3).setCellValue(String.valueOf(booking.getCheckInDate()));
                 row.createCell(4).setCellValue(String.valueOf(booking.getCheckOutDate()));
                 row.createCell(5).setCellValue(String.valueOf(booking.getStatus()));
@@ -63,7 +65,7 @@ public class ReportService {
             }
 
             for (int i = 0; i < columns.length; i++) {
-                sheet.autoSizeColumn(i);
+                sheet.setColumnWidth(i, 22 * 256);
             }
 
             workbook.write(outputStream);
@@ -71,5 +73,16 @@ public class ReportService {
         } catch (IOException ex) {
             throw new RuntimeException("Cannot export booking report", ex);
         }
+    }
+
+    private static String sanitizeCell(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r') {
+            return "'" + value;
+        }
+        return value;
     }
 }

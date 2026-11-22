@@ -90,17 +90,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void otherRuntimeExceptionsKeepTheirRawMessageAndMapTo400() {
-        ResponseEntity<Map<String, String>> response = handler.handleRuntime(new RuntimeException("Invalid dates"));
+    void unhandledRuntimeExceptionsMapTo500WithoutLeakingInternalMessage() {
+        ResponseEntity<Map<String, String>> response = handler.handleRuntime(new RuntimeException("SQL details"));
 
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        assertThat(response.getBody()).containsEntry("message", "Invalid dates");
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody())
+                .containsEntry("message", HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase())
+                .containsEntry("code", "error.internal");
     }
 
     @Test
     void nullMessageFallsBackToReasonPhraseInsteadOfFailing() {
         ResponseEntity<Map<String, String>> response = handler.handleRuntime(new RuntimeException());
 
-        assertThat(response.getBody()).containsEntry("message", HttpStatus.BAD_REQUEST.getReasonPhrase());
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getBody()).containsEntry("message", HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase());
     }
 }

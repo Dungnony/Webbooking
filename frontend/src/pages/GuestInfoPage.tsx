@@ -23,19 +23,28 @@ const GuestInfoPage: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const locationState = (location.state as GuestInfoLocationState | null) || {};
+  const searchParams = new URLSearchParams(location.search);
+  const queryCheckIn = searchParams.get('checkIn') || undefined;
+  const queryCheckOut = searchParams.get('checkOut') || undefined;
+  const queryRoomIdRaw = Number(searchParams.get('roomId'));
+  const queryRoomId = Number.isFinite(queryRoomIdRaw) && queryRoomIdRaw > 0 ? queryRoomIdRaw : null;
+
   const [form] = Form.useForm<GuestInfo>();
   const [hotel, setHotel] = useState<HotelWithStats | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const initialCheckInStr = locationState.checkIn || queryCheckIn;
+  const initialCheckOutStr = locationState.checkOut || queryCheckOut;
+
   const [checkIn, setCheckIn] = useState<Moment | null>(
-    locationState.checkIn ? moment(locationState.checkIn, 'YYYY-MM-DD') : moment().add(1, 'day')
+    initialCheckInStr ? moment(initialCheckInStr, 'YYYY-MM-DD') : moment().add(1, 'day')
   );
   const [checkOut, setCheckOut] = useState<Moment | null>(
-    locationState.checkOut ? moment(locationState.checkOut, 'YYYY-MM-DD') : moment().add(3, 'day')
+    initialCheckOutStr ? moment(initialCheckOutStr, 'YYYY-MM-DD') : moment().add(3, 'day')
   );
 
   // roomId được truyền từ HotelDetailPage (nếu có), fallback về rooms[0]
-  const selectedRoomId: number | null = locationState.roomId ?? null;
+  const selectedRoomId: number | null = locationState.roomId ?? queryRoomId;
 
   const token = localStorage.getItem('token');
   const nights = checkIn && checkOut ? checkOut.diff(checkIn, 'day') : 2;
@@ -182,7 +191,7 @@ const GuestInfoPage: React.FC = () => {
                     value={checkOut}
                     onChange={setCheckOut}
                     format="DD/MM/YYYY"
-                    disabledDate={(d) => d.isBefore(checkIn || moment(), 'day')}
+                    disabledDate={(d) => Boolean(d && d.isSameOrBefore(checkIn || moment(), 'day'))}
                     style={{ width: '100%', height: 40 }}
                   />
                 </Col>
@@ -234,7 +243,7 @@ const GuestInfoPage: React.FC = () => {
                 <div style={{ fontSize: 12, color: '#595959' }}>📍 {hotel?.city || hotel?.address || 'Việt Nam'}</div>
                 <div style={{ marginTop: 4 }}>
                   <span style={{ background: '#003b95', color: '#fff', fontSize: 11, padding: '2px 6px', borderRadius: 3 }}>
-                    {(hotel?.ratingAvg ?? 8.5).toFixed(1)}
+                    {hotel?.ratingAvg && hotel.ratingAvg > 0 ? hotel.ratingAvg.toFixed(1) : '—'}
                   </span>
                 </div>
               </div>

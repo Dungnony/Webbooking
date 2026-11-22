@@ -33,6 +33,8 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 @Service
 public class BookingService {
@@ -84,7 +86,18 @@ public class BookingService {
         Hotel hotel = hotelRepository.findById(hotelId)
                 .orElseThrow(() -> new NotFoundException("error.hotel.notFound"));
 
+        if (hotel.getStatus() != null && !"ACTIVE".equalsIgnoreCase(hotel.getStatus())) {
+            throw new BusinessException("error.hotel.inactive");
+        }
+
         long nights = countNights(request.getCheckInDate(), request.getCheckOutDate());
+
+        // Merge duplicate room IDs and sort ascending so concurrent requests lock rooms in a consistent order.
+        Map<Long, Integer> mergedQuantities = new TreeMap<>();
+        for (BookingRoomRequest roomRequest : request.getRooms()) {
+            validateRoomRequest(roomRequest);
+            mergedQuantities.merge(roomRequest.getRoomId(), roomRequest.getQuantity(), Integer::sum);
+        }
 
         Booking booking = new Booking();
         booking.setUser(user);
@@ -99,15 +112,16 @@ public class BookingService {
         double totalPrice = 0;
         List<BookingRoom> details = new ArrayList<>();
 
-        for (BookingRoomRequest roomRequest : request.getRooms()) {
-            validateRoomRequest(roomRequest);
+        for (Map.Entry<Long, Integer> entry : mergedQuantities.entrySet()) {
+            Long roomId = entry.getKey();
+            Integer requestedQuantity = entry.getValue();
 
-            Room room = lockRoom(roomRequest.getRoomId());
+            Room room = lockRoom(roomId);
 
             validateRoomBelongsToHotel(room, hotelId);
             validateRoomAvailable(
                     room,
-                    roomRequest.getQuantity(),
+                    requestedQuantity,
                     request.getCheckInDate(),
                     request.getCheckOutDate(),
                     null);
@@ -115,11 +129,11 @@ public class BookingService {
             BookingRoom bookingRoom = new BookingRoom();
             bookingRoom.setBooking(savedBooking);
             bookingRoom.setRoom(room);
-            bookingRoom.setQuantity(roomRequest.getQuantity());
+            bookingRoom.setQuantity(requestedQuantity);
             bookingRoom.setPrice(room.getPricePerNight());
 
             details.add(bookingRoomRepository.save(bookingRoom));
-            totalPrice += room.getPricePerNight() * roomRequest.getQuantity() * nights;
+            totalPrice += room.getPricePerNight() * requestedQuantity * nights;
         }
 
         savedBooking.setBookingRooms(details);
@@ -160,6 +174,7 @@ public class BookingService {
 
         booking.setStatus(BookingStatus.CANCELLED);
         Booking result = bookingRepository.save(booking);
+        autoRejectPendingRequests(result, user, "Booking cancelled");
 
         notificationService.notifyAdmins(
                 "notification.bookingCancelled.title", "notification.bookingCancelled.body",
@@ -207,9 +222,13 @@ public class BookingService {
         if (booking.getStatus() != BookingStatus.PENDING) {
             throw new BusinessException("error.booking.onlyPendingReject");
         }
+        if (booking.getPaymentStatus() == PaymentStatus.PAID) {
+            throw new BusinessException("error.booking.paidCannotReject");
+        }
 
         booking.setStatus(BookingStatus.REJECTED);
         Booking result = bookingRepository.save(booking);
+        autoRejectPendingRequests(result, null, response);
 
         notifyWithOptionalResponse(
                 booking.getUser(), response,
@@ -255,6 +274,9 @@ public class BookingService {
         if (booking.getStatus() == BookingStatus.CANCELLED
                 || booking.getStatus() == BookingStatus.REJECTED) {
             throw new BusinessException("error.request.bookingClosed");
+        }
+        if (bookingRequestRepository.existsByBookingAndStatus(booking, RequestStatus.PENDING)) {
+            throw new BusinessException("error.request.pendingExists");
         }
 
         if (request.getType() == RequestType.CHANGE_DATE) {
@@ -446,24 +468,58 @@ public class BookingService {
             throw new BusinessException("error.room.quantityInvalid");
         }
 
-        Long reserved = excludedBookingId == null
-                ? bookingRoomRepository.sumReservedQuantityForRoom(
+        List<BookingRoom> overlapping = excludedBookingId == null
+                ? bookingRoomRepository.findOverlappingReservations(
                         room,
                         checkIn,
                         checkOut,
                         RESERVED_STATUSES)
-                : bookingRoomRepository.sumReservedQuantityForRoomExcludingBooking(
+                : bookingRoomRepository.findOverlappingReservationsExcludingBooking(
                         room,
                         excludedBookingId,
                         checkIn,
                         checkOut,
                         RESERVED_STATUSES);
 
-        int available = room.getQuantity() - reserved.intValue();
+        int maxReserved = 0;
+        for (LocalDate day = checkIn; day.isBefore(checkOut); day = day.plusDays(1)) {
+            int dayReserved = 0;
+            for (BookingRoom br : overlapping) {
+                if (br.getBooking() == null || br.getQuantity() == null) {
+                    continue;
+                }
+                LocalDate bIn = br.getBooking().getCheckInDate();
+                LocalDate bOut = br.getBooking().getCheckOutDate();
+                if (bIn != null && bOut != null && !day.isBefore(bIn) && day.isBefore(bOut)) {
+                    dayReserved += br.getQuantity();
+                }
+            }
+            if (dayReserved > maxReserved) {
+                maxReserved = dayReserved;
+            }
+        }
+
+        int available = room.getQuantity() - maxReserved;
 
         if (requestedQuantity > available) {
             throw new BusinessException("error.booking.roomUnavailable", room.getName(), available);
         }
+    }
+
+    private void autoRejectPendingRequests(Booking booking, User actor, String reason) {
+        List<com.Nhom2.booking.entity.BookingRequest> pending =
+                bookingRequestRepository.findByBookingAndStatus(booking, RequestStatus.PENDING);
+        if (pending == null || pending.isEmpty()) {
+            return;
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (com.Nhom2.booking.entity.BookingRequest req : pending) {
+            req.setStatus(RequestStatus.REJECTED);
+            req.setProcessedAt(now);
+            req.setProcessedBy(actor);
+            req.setAdminResponse(reason);
+        }
+        bookingRequestRepository.saveAll(pending);
     }
 
     private void validateAvailabilityForExistingBooking(

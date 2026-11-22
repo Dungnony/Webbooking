@@ -90,9 +90,9 @@ class BookingServiceTest {
         when(bookingRepository.save(any(Booking.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(bookingRoomRepository.save(any(BookingRoom.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(bookingRequestRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(bookingRoomRepository.sumReservedQuantityForRoom(any(), any(), any(), any())).thenReturn(0L);
-        when(bookingRoomRepository.sumReservedQuantityForRoomExcludingBooking(any(), anyLong(), any(), any(), any()))
-                .thenReturn(0L);
+        when(bookingRoomRepository.findOverlappingReservations(any(), any(), any(), any())).thenReturn(List.of());
+        when(bookingRoomRepository.findOverlappingReservationsExcludingBooking(any(), anyLong(), any(), any(), any()))
+                .thenReturn(List.of());
 
         SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("alice", null));
     }
@@ -126,11 +126,42 @@ class BookingServiceTest {
 
     @Test
     void bookingIsRejectedWhenTheLockedRoomIsFull() {
-        when(bookingRoomRepository.sumReservedQuantityForRoom(any(), any(), any(), any())).thenReturn(1L);
+        Booking conflict = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.UNPAID, TODAY.plusDays(1));
+        conflict.setCheckOutDate(TODAY.plusDays(3));
+        BookingRoom reserved = new BookingRoom();
+        reserved.setBooking(conflict);
+        reserved.setRoom(room);
+        reserved.setQuantity(1);
+        when(bookingRoomRepository.findOverlappingReservations(any(), any(), any(), any())).thenReturn(List.of(reserved));
 
         assertThatThrownBy(() -> bookingService.createBooking(
                 "alice", 10L, bookingRequest(TODAY.plusDays(1), TODAY.plusDays(3))))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void backToBackReservationsDoNotDoubleCountNonOverlappingNights() {
+        Booking night1 = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.UNPAID, TODAY.plusDays(1));
+        night1.setCheckOutDate(TODAY.plusDays(2));
+        BookingRoom br1 = new BookingRoom();
+        br1.setBooking(night1);
+        br1.setRoom(room);
+        br1.setQuantity(1);
+
+        Booking night2 = existingBooking(BookingStatus.CONFIRMED, PaymentStatus.UNPAID, TODAY.plusDays(2));
+        night2.setCheckOutDate(TODAY.plusDays(3));
+        BookingRoom br2 = new BookingRoom();
+        br2.setBooking(night2);
+        br2.setRoom(room);
+        br2.setQuantity(1);
+
+        room.setQuantity(2);
+        when(bookingRoomRepository.findOverlappingReservations(any(), any(), any(), any()))
+                .thenReturn(List.of(br1, br2));
+
+        Booking created = bookingService.createBooking(
+                "alice", 10L, bookingRequest(TODAY.plusDays(1), TODAY.plusDays(3)));
+        assertThat(created.getStatus()).isEqualTo(BookingStatus.PENDING);
     }
 
     // ── A3: cancellation rules ─────────────────────────────────────────────────

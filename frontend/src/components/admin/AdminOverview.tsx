@@ -67,9 +67,9 @@ const AdminOverview: React.FC = () => {
       // Cache danh sách booking 30 giây
       const bookings = await cachedFetch('admin_bookings_all', () => adminApi.getBookings(), 30_000);
 
+      const now = new Date();
       const months: MonthlyRevenue[] = Array.from({ length: CHART_MONTHS }).map((_, i) => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - (CHART_MONTHS - 1 - i));
+        const d = new Date(now.getFullYear(), now.getMonth() - (CHART_MONTHS - 1 - i), 1);
         return {
           month: d.getMonth() + 1,
           year: d.getFullYear(),
@@ -78,6 +78,7 @@ const AdminOverview: React.FC = () => {
       });
 
       (bookings || []).forEach(b => {
+        if (b.status === 'CANCELLED' || b.status === 'REJECTED') return;
         const dateStr = b.checkInDate || b.createdAt;
         // Same definition as the paidRevenue total: only money actually received counts.
         if (b.paymentStatus === 'PAID' && dateStr) {

@@ -18,5 +18,9 @@ public interface BookingRequestRepository extends JpaRepository<BookingRequest, 
 
     List<BookingRequest> findByBookingUserOrderByCreatedAtDesc(User user);
 
+    List<BookingRequest> findByBookingAndStatus(Booking booking, RequestStatus status);
+
+    boolean existsByBookingAndStatus(Booking booking, RequestStatus status);
+
     long countByStatus(RequestStatus status);
 }

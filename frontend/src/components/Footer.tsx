@@ -56,8 +56,8 @@ const Footer: React.FC = () => {
           <ul>
             <li><a onClick={() => navigate('/login')}>{t('footer.signIn')}</a></li>
             <li><a onClick={() => navigate('/register')}>{t('footer.register')}</a></li>
-            <li><a href="#">{t('footer.listProperty')}</a></li>
-            <li><a href="#">{t('footer.partnerHelp')}</a></li>
+            <li><a onClick={() => navigate('/deals')}>{t('footer.listProperty')}</a></li>
+            <li><a onClick={() => navigate('/terms')}>{t('footer.partnerHelp')}</a></li>
             <li><a onClick={() => navigate('/terms')}>{t('footer.terms')}</a></li>
             <li><a onClick={() => navigate('/privacy')}>{t('footer.privacy')}</a></li>
           </ul>

@@ -75,10 +75,28 @@ public class ImageStorageService {
         String extension = resolveImageExtension(file.getOriginalFilename());
         String objectPath = folder + "/" + UUID.randomUUID() + extension;
         byte[] bytes = readBytes(file);
+        if (!hasValidImageSignature(bytes)) {
+            throw new BusinessException("error.image.unsupportedType", String.join(", ", CONTENT_TYPES.keySet()));
+        }
 
         return usesSupabase()
                 ? uploadToSupabase(objectPath, bytes, CONTENT_TYPES.get(extension))
                 : saveLocally(objectPath, bytes);
+    }
+
+    private static boolean hasValidImageSignature(byte[] bytes) {
+        if (bytes == null || bytes.length < 4) {
+            return false;
+        }
+        boolean isJpeg = (bytes[0] & 0xFF) == 0xFF && (bytes[1] & 0xFF) == 0xD8 && (bytes[2] & 0xFF) == 0xFF;
+        boolean isPng = (bytes[0] & 0xFF) == 0x89 && bytes[1] == 'P' && bytes[2] == 'N' && bytes[3] == 'G';
+        boolean isGif = bytes.length >= 6
+                && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == '8'
+                && (bytes[4] == '7' || bytes[4] == '9') && bytes[5] == 'a';
+        boolean isWebp = bytes.length >= 12
+                && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
+                && bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P';
+        return isJpeg || isPng || isGif || isWebp;
     }
 
     /** Returns the lowercase extension with its dot if it is an allowed image format. */
@@ -112,7 +130,11 @@ public class ImageStorageService {
 
     private String saveLocally(String objectPath, byte[] bytes) {
         try {
-            Path target = localDir.resolve(objectPath);
+            Path root = localDir.toAbsolutePath().normalize();
+            Path target = root.resolve(objectPath).normalize();
+            if (!target.startsWith(root)) {
+                throw new BusinessException("error.image.unsupportedType", String.join(", ", CONTENT_TYPES.keySet()));
+            }
             Files.createDirectories(target.getParent());
             Files.write(target, bytes);
         } catch (IOException e) {

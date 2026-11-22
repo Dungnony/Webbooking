@@ -22,6 +22,31 @@ type PayMethod = 'qr' | 'bankApp';
 const nightsBetween = (from?: string, to?: string) =>
   from && to ? Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) : undefined;
 
+const buildFallbackFlowState = (
+  state: BookingFlowState | null,
+  targetBooking?: Booking
+): BookingFlowState | null => {
+  if (state) {
+    return targetBooking ? { ...state, booking: targetBooking } : state;
+  }
+  if (!targetBooking) return null;
+  return {
+    booking: targetBooking,
+    hotel: targetBooking.hotel ?? null,
+    guestInfo: {
+      firstName: targetBooking.user?.username || '',
+      lastName: '',
+      email: targetBooking.user?.email || '',
+      phone: '',
+    },
+    room: targetBooking.bookingRooms?.[0]?.room ?? {},
+    checkIn: targetBooking.checkInDate ?? '',
+    checkOut: targetBooking.checkOutDate ?? '',
+    nights: Math.max(1, nightsBetween(targetBooking.checkInDate, targetBooking.checkOutDate) ?? 1),
+    totalPrice: targetBooking.totalPrice ?? 0,
+  };
+};
+
 const PaymentPage: React.FC = () => {
   const location = useLocation();
   const state = location.state as BookingFlowState | null;
@@ -91,7 +116,8 @@ const PaymentPage: React.FC = () => {
         if (updated.paymentStatus === 'PAID') {
           done = true;
           message.success(t('payment.paidAutomatically'));
-          if (state) navigate('/booking/confirmation', { state: { ...state, booking: updated } });
+          const nextState = buildFallbackFlowState(state, updated);
+          if (nextState) navigate('/booking/confirmation', { state: nextState });
           else navigate('/my-bookings');
         }
       } catch (e) {
@@ -143,9 +169,12 @@ const PaymentPage: React.FC = () => {
     if (bookingId === undefined) return;
     setConfirming(true);
     try {
-      await paymentApi.confirmPayment(bookingId);
+      const updated = await paymentApi.confirmPayment(bookingId);
+      setCurrentBooking(updated);
       message.success(t('payment.confirmationSent'));
-      navigate('/booking/confirmation', { state });
+      const nextState = buildFallbackFlowState(state, updated || booking);
+      if (nextState) navigate('/booking/confirmation', { state: nextState });
+      else navigate('/my-bookings');
     } catch (e) {
       message.error(getErrorMessage(e, t('payment.confirmFailed')));
     } finally {

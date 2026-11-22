@@ -4,6 +4,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { userApi } from '../../api';
 import { getErrorMessage } from '../../utils/errors';
+import { STRONG_PASSWORD_PATTERN } from '../../utils/passwordPolicy';
 import type { User } from '../../api-generated';
 
 const AdminUsers: React.FC = () => {
@@ -100,10 +101,13 @@ const AdminUsers: React.FC = () => {
       render: (_: unknown, record: User) => {
         const userId = record.id;
         if (record.username === 'admin' || userId === undefined) return null;
+        const isSelf = record.username === localStorage.getItem('username');
         return (
           <div style={{ display: 'flex', gap: 8 }}>
             <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>{t('admin.common.edit')}</Button>
-            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(userId)}>{t('admin.common.delete')}</Button>
+            {!isSelf && (
+              <Button danger size="small" icon={<DeleteOutlined />} onClick={() => handleDelete(userId)}>{t('admin.common.delete')}</Button>
+            )}
           </div>
         );
       }
@@ -180,7 +184,10 @@ const AdminUsers: React.FC = () => {
             <Form.Item
               name="password"
               label={t('auth.password')}
-              rules={[{ required: true, message: t('auth.passwordRequired') }]}
+              rules={[
+                { required: true, message: t('auth.passwordRequired') },
+                { pattern: STRONG_PASSWORD_PATTERN, message: t('auth.passwordPolicy') },
+              ]}
             >
               <Input.Password />
             </Form.Item>

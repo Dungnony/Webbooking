@@ -9,10 +9,15 @@ import com.Nhom2.booking.exception.UnauthorizedException;
 import com.Nhom2.booking.i18n.Messages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 
@@ -62,12 +67,37 @@ public class GlobalExceptionHandler {
         return localized(HttpStatus.BAD_REQUEST, ex);
     }
 
-    // Other RuntimeExceptions (framework and internal errors) keep their raw message and also map to 400.
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, String>> handleDataIntegrity(DataIntegrityViolationException ex) {
+        log.warn("Data integrity violation: {}", ex.getMostSpecificCause().getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("message", HttpStatus.CONFLICT.getReasonPhrase(), "code", "error.data.conflict"));
+    }
+
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
+    public ResponseEntity<Map<String, String>> handleBadInput(Exception ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("message", HttpStatus.BAD_REQUEST.getReasonPhrase(), "code", "error.request.invalid"));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Map<String, String>> handleNoResource(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(Map.of("message", HttpStatus.NOT_FOUND.getReasonPhrase(), "code", "error.resource.notFound"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, String>> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(Map.of("message", HttpStatus.METHOD_NOT_ALLOWED.getReasonPhrase()));
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, String>> handleRuntime(RuntimeException ex) {
-        HttpStatus status = HttpStatus.BAD_REQUEST;
-        String message = ex.getMessage() == null ? status.getReasonPhrase() : ex.getMessage();
-        return ResponseEntity.status(status).body(Map.of("message", message));
+        log.error("Unhandled runtime error", ex);
+        HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+        return ResponseEntity.status(status)
+                .body(Map.of("message", status.getReasonPhrase(), "code", "error.internal"));
     }
 
     private ResponseEntity<Map<String, String>> localized(HttpStatus status, BusinessException ex) {

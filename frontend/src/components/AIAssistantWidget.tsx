@@ -184,7 +184,7 @@ const AIAssistantWidget: React.FC = () => {
     <button className="ai-fab" onClick={() => setOpen(v => !v)} title={t('ai.name')} aria-label={t('ai.open')}>
     {open
         ? <span style={{ fontSize: 20 }}>✕</span>
-        : <img src="/logo-ai.png" style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
+        : <img src="/logo-ai.png" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
     }
     {!open && <span className="ai-badge" />}
     </button>
@@ -194,7 +194,7 @@ const AIAssistantWidget: React.FC = () => {
         <div className="ai-window">
           <div className="ai-header">
             <div className="ai-avatar">
-            <img src="/logo-ai.png" style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
+            <img src="/logo-ai.png" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
             </div>
             <div>
               <div className="ai-hname">{t('ai.title')}</div>
@@ -231,7 +231,7 @@ const AIAssistantWidget: React.FC = () => {
               <div key={i} className={`ai-row ${msg.role}`}>
                 {msg.role === 'assistant' &&                 
                 <div className="ai-avsm">
-                <img src="/logo-ai.png" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
+                <img src="/logo-ai.png" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
                 </div>}
                 <div className={`ai-bubble ${msg.role}`}>{msg.content}</div>
               </div>
@@ -240,7 +240,7 @@ const AIAssistantWidget: React.FC = () => {
             {loading && (
               <div className="ai-row">
                 <div className="ai-avsm">
-                <img src="/logo-ai.png" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
+                <img src="/logo-ai.png" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} alt="AI" />
                 </div>
                 <div className="ai-bubble assistant">
                   <div className="ai-dots"><span /><span /><span /></div>

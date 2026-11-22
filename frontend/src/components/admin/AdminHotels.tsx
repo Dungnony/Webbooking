@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Table, Button, Space, Modal, Form, Input, message, Upload, Drawer, Tag } from 'antd';
+import { Table, Button, Space, Modal, Form, Input, InputNumber, message, Upload, Drawer, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, PictureOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { hotelApi, imageApi, roomApi, HotelWithStats } from '../../api';
@@ -189,6 +189,10 @@ const AdminHotels: React.FC = () => {
         try {
           await roomApi.delete(roomId);
           message.success(t('admin.hotels.roomDeleted'));
+          invalidateCache('hotels_all');
+          if (currentHotelForRooms?.id !== undefined) {
+            invalidateCache(`hotel_${currentHotelForRooms.id}`);
+          }
           reloadCurrentHotelRooms();
         } catch (error) {
           message.error(getErrorMessage(error, t('admin.hotels.roomDeleteFailed')));
@@ -209,6 +213,10 @@ const AdminHotels: React.FC = () => {
       message.success(t('admin.hotels.imageUploaded'));
       setUploadRoomModalOpen(false);
       setRoomFileList([]);
+      invalidateCache('hotels_all');
+      if (currentHotelForRooms?.id !== undefined) {
+        invalidateCache(`hotel_${currentUploadRoomId}`);
+      }
       reloadCurrentHotelRooms();
     } catch (error) {
       message.error(getErrorMessage(error, t('admin.hotels.imageUploadFailed')));
@@ -409,19 +417,19 @@ const AdminHotels: React.FC = () => {
           </Form.Item>
           <div style={{ display: 'flex', gap: 16 }}>
             <Form.Item name="pricePerNight" label={t('admin.hotels.pricePerNightVnd')} rules={[{ required: true }]} style={{ flex: 1 }}>
-              <Input type="number" min={1} />
+              <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="capacity" label={t('admin.hotels.capacity')} rules={[{ required: true }]} style={{ width: 100 }}>
-              <Input type="number" min={1} />
+            <Form.Item name="capacity" label={t('admin.hotels.capacity')} rules={[{ required: true }]} style={{ width: 110 }}>
+              <InputNumber min={1} style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item
               name="quantity"
               label={t('admin.hotels.quantity')}
               rules={[{ required: true }]}
               tooltip={t('admin.hotels.quantityTooltip')}
-              style={{ width: 100 }}
+              style={{ width: 110 }}
             >
-              <Input type="number" min={0} />
+              <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
           </div>
           <Form.Item name="description" label={t('admin.hotels.roomDescription')}>

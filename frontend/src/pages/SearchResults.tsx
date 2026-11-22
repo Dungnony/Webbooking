@@ -372,12 +372,19 @@ const SearchResults: React.FC = () => {
                   const price = lowestRoomPrice(hotel);
                   const rating = hotel.ratingAvg ?? null;
                   const ratingLabel = t(`common.rating.${ratingLabelKey(rating)}`);
+                  const detailParams = new URLSearchParams();
+                  if (checkIn) detailParams.set('checkIn', checkIn);
+                  if (checkOut) detailParams.set('checkOut', checkOut);
+                  if (guests) detailParams.set('guests', guests);
+                  if (roomsStr) detailParams.set('rooms', roomsStr);
+                  const detailQs = detailParams.toString();
+                  const detailUrl = detailQs ? `/hotels/${hotel.id}?${detailQs}` : `/hotels/${hotel.id}`;
 
                   return (
                     <div
                       key={hotel.id}
                       className="hotel-result-card"
-                      onClick={() => navigate(`/hotels/${hotel.id}`)}
+                      onClick={() => navigate(detailUrl)}
                     >
                     {(() => {
                       const imgUrl = getHotelImage(hotel);
@@ -428,7 +435,7 @@ const SearchResults: React.FC = () => {
                             <button
                               className="hotel-result-cta"
                               style={{ marginTop: 8, padding: '8px 16px', borderRadius: 4, cursor: 'pointer', background: '#006ce4', color: '#fff', border: 'none', fontWeight: 700, fontSize: 14, width: '100%' }}
-                              onClick={(e) => { e.stopPropagation(); navigate(`/hotels/${hotel.id}`); }}
+                              onClick={(e) => { e.stopPropagation(); navigate(detailUrl); }}
                             >
                               {t('results.seeAvailability')}
                             </button>
